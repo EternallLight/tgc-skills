@@ -3,7 +3,8 @@
 A shipping pipeline for [Claude Code](https://docs.anthropic.com/en/docs/claude-code),
 packaged as a plugin. Nine skills that take a change from "locked plan" to "merged and
 cleaned up", using in-session agents — no external reviewer accounts, no infrastructure
-beyond `git` and `gh`.
+beyond `git` and `gh` (the two cmux pane-orchestration skills additionally use the
+optional cmux terminal).
 
 ## The pipeline
 

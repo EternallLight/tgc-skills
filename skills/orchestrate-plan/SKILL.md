@@ -26,8 +26,9 @@ Three non-negotiables:
 
 **Prerequisites:** a locked plan file exists (written AND reviewed — not a vague idea; if there is
 no plan, write one and get it approved first). You are inside a cmux workspace — this skill drives
-cmux panes; the CLI cheat sheet lives in the `cmux-orchestrate` skill
-(`skills/cmux-orchestrate/references/cmux-cli.md`). Verbatim templates are in `references/templates.md`.
+cmux panes; the CLI cheat sheet lives in the `cmux-orchestrate` skill (its `references/cmux-cli.md`,
+resolved relative to that skill's own directory). Verbatim templates are in this skill's
+`references/templates.md`.
 
 ## Worker engine — Claude Code (default) or Codex (optional)
 
@@ -38,15 +39,20 @@ launch command and effort mechanics differ.
 
 | | **Claude Code worker** (default) | **Codex worker** (optional) |
 |---|---|---|
-| Launcher | `claude --dangerously-skip-permissions` | `codex --dangerously-bypass-approvals-and-sandbox` |
+| Launcher (default) | `claude` | `codex -c model_reasoning_effort=medium` |
 | Medium effort | `/effort medium` slash command, **re-applied after every `/clear`** (Claude reverts effort on clear) | **launch flag** `codex -c model_reasoning_effort=medium` — Codex has **no `/effort` command**; the flag is process-level so it **persists across `/clear`**. Valid: `minimal\|low\|medium\|high\|xhigh`. |
 | Clear between phases | `/clear` | `/clear` (works in Codex too) |
-| Perms prompts | none (skip-perms) | none (bypass) |
+| Perms prompts | answered by the Phase 4 monitor (NEEDS-INPUT) | answered by the Phase 4 monitor (NEEDS-INPUT) |
 
-The skip-permissions launchers exist so a worker never stalls on approval prompts mid-phase —
-only use them in repos and environments where that is acceptable; otherwise launch plain and
-budget for answering permission prompts via the monitor loop. If the user has shell aliases for
-these launchers, use theirs.
+**The plain launch is the default.** Workers will pause on permission/approval prompts; the Phase 4
+monitor loop answers them (that is what NEEDS-INPUT handling is for). Skip-permissions launchers
+(`claude --dangerously-skip-permissions` / `codex --dangerously-bypass-approvals-and-sandbox`)
+remove that stall but let a worker run ANY command unattended — a malicious repo instruction or
+hook can then delete data or exfiltrate credentials. Use them **only with the user's explicit
+opt-in**, and only in a sandboxed/disposable environment or a repo where that blast radius is
+acceptable. Never pick them silently. If the user has shell aliases for these launchers, use theirs —
+but check what the alias expands to first (`type claude`): a plain-looking `claude` aliased to the
+skip-perms flag would silently defeat the plain-launch default.
 
 **Effort is ALWAYS `medium` for implementation.** Building against a locked, well-specified plan
 does NOT need `high`/`xhigh` — they are markedly slower for negligible gain here.
@@ -91,7 +97,7 @@ resumed mid-run), reuse it — never duplicate.
 
 Then **present the phase breakdown + the lane plan (sequential vs N parallel panes) to the human and
 get confirmation before spawning anything** (human-led planning before fan-out — cmux-orchestrate
-golden rule 6). Keep the list in lockstep with reality: mark a phase `in_progress` when you hand it
+golden rule 7). Keep the list in lockstep with reality: mark a phase `in_progress` when you hand it
 to a worker, and `completed` only after it's verified — at most one `in_progress` PER LANE.
 
 ## Phase 2 — Repo prep & spawn worker(s)
@@ -105,26 +111,58 @@ git rev-list --count <candidate>..<labelMain>   # …and behind?
 A candidate thousands of commits ahead and zero behind IS the trunk regardless of its name.
 
 **For EACH lane** (one repo → one pane; a single-repo plan is just one lane):
-1. **Create the feature branch** off the verified base. Never work on main/master; never force-push.
-2. **Write `WORKER-BRIEF.md`** in that repo (template T1) — standing orders the worker re-reads every
+1. **Require a clean worktree and record a baseline.** `git status --porcelain` must show no
+   entries except untracked planning artifacts you know about (`PLAN.md`, `WORKER-BRIEF.md`,
+   review logs). Any tracked modification, staged change, or unexpected untracked file → STOP
+   and ask the user to commit or stash —
+   never let a worker build on top of, overwrite, or commit someone's uncommitted changes.
+   Then **create the feature branch** off the verified base and, ON the new branch, record the
+   baseline: `git rev-parse HEAD`. **Write the literal hash into your lane ledger/todo** — shell
+   variables do NOT survive between your tool calls, so every later verification must inline the
+   literal hash (never a `$BASE` you set in an earlier call, which would silently expand empty and
+   turn `$BASE..HEAD` into `..HEAD`/`HEAD..HEAD`). Never work on main/master; never force-push.
+2. **Write `WORKER-BRIEF.md`** in that repo (template T1). If a `WORKER-BRIEF.md` already exists
+   (from an earlier run or the user's own), do NOT silently overwrite it — confirm with the user,
+   or pick a distinct name and use that name consistently in T1/T2. It's standing orders the worker re-reads every
    phase (repo+branch, what's done/out-of-scope, conventions, per-phase workflow, stop points,
    the `=== PHASE N DONE ===` marker, watch-items). Keep it untracked; it is never committed.
    **Discover the repo's REAL pre-push gate before writing the brief** — read the pre-push hook /
    husky config / package.json scripts (`prepush`, `check`, knip, lint-staged) and put the exact
    full command into T1's self-verify step. A brief that names a subset (e.g. a `check` script
    without knip) lets every phase pass locally and then bounce at push.
-3. **Spawn + name the pane**, capture its surface ref (`$W_api`, `$W_web`, …; one variable per lane):
+3. **Spawn + name the pane**, capture its surface ref:
    ```bash
-   W=$(cmux --json new-split right --focus false | sed -n 's/.*"surface_ref" : "\(surface:[0-9]*\)".*/\1/p')
-   cmux rename-tab --surface "$W" "worker-<repo>"
+   W=$(cmux --json new-split right --focus false | sed -n 's/.*"surface_ref"[[:space:]]*:[[:space:]]*"\(surface:[0-9]*\)".*/\1/p')
+   case "$W" in
+     surface:[0-9]*) echo "worker surface: $W"; cmux rename-tab --surface "$W" "worker-<repo>" ;;
+     *) echo "ABORT: no surface ref captured" ;;
+   esac
    ```
-4. **Prep the shell + launch the worker** (Claude Code default):
+   **The guard is mandatory — on ABORT, STOP: do not send ANYTHING.** If the JSON shape differs
+   from what the `sed` expects, `$W` comes out empty — and an empty/omitted `--surface` targets
+   YOUR OWN pane, so every later `send` (including the worker launch) would land in the manager.
+   On ABORT, run `cmux --json tree` and take the new surface's ref from there instead.
+   **Record the literal ref (e.g. `surface:21`) in your lane ledger and inline it in every later
+   command** — shell variables don't persist between your tool calls, and an unset `$W` silently
+   targets the manager (the `"$W"` in the snippets below stands for that literal ref). `surface:N`
+   refs can also SHIFT as panes open/close (cmux-orchestrate golden rule 3): for long or parallel
+   runs prefer durable UUIDs (`cmux --id-format uuids ...`), or re-confirm each lane's ref via
+   `cmux --json tree` (match the `worker-<repo>` tab title) before targeting it — especially
+   after any pane is opened or closed.
+4. **Prep the shell + launch the worker** (plain launch — see the engine section for the
+   skip-perms opt-in):
    ```bash
    cmux send --surface "$W" -- 'cd <repo> && <env setup e.g. nvm use>\n'
-   cmux send --surface "$W" -- 'claude --dangerously-skip-permissions\n'
+   cmux send --surface "$W" -- 'pwd\n'
+   cmux read-screen --surface "$W" | tail -4        # MUST show <repo> — do not launch on a failed cd
+   cmux send --surface "$W" -- 'claude\n'                              # Claude engine (default)
+   # cmux send --surface "$W" -- 'codex -c model_reasoning_effort=medium\n'   # Codex engine
    ```
-   Confirm boot: `cmux read-screen --surface "$W" | tail -8` (Claude banner + `❯`).
-5. **Set `medium` effort:**
+   Quote `<repo>` inside the worker command if the path contains spaces/metacharacters; launch the
+   agent ONLY after the `pwd` check confirms the right repo.
+   Confirm boot: `cmux read-screen --surface "$W" | tail -8` (agent banner + input prompt).
+5. **Set `medium` effort (Claude engine only** — Codex already got it as a launch flag and has no
+   `/effort` command):
    ```bash
    cmux send --surface "$W" -- '/effort medium'; cmux send-key --surface "$W" enter
    ```
@@ -142,7 +180,8 @@ monitor tell you which one needs attention.
 1. **Confirm idle** — `read-screen | tail -8`; no spinner.
 2. **Fully clear, then re-set effort:** `cmux send --surface "$W" -- '/clear\n'`, `read-screen | tail`
    to confirm a fresh transcript (if a `/` palette shows, an extra `send-key enter` runs `/clear`).
-   **`/clear` reverts effort — immediately re-apply** `/effort medium` + `send-key enter`; confirm `● medium`.
+   **Claude engine: `/clear` reverts effort — immediately re-apply** `/effort medium` + `send-key enter`;
+   confirm `● medium`. (Codex engine: skip this — its launch-flag effort persists across `/clear`.)
 3. **Send the per-phase prompt** (template T2). It carries **(a) the ABSOLUTE path to the full plan
    and (b) this phase's description + stop point**, so the worker reads the whole plan from disk but
    builds ONLY this phase. The prompt instructs the worker to implement the **simplest thing that
@@ -181,8 +220,9 @@ refs with `cmux --json tree`.)
 
 **Service every lane to resolution each cycle — keep a ledger.** A lane that is DONE, NEEDS-INPUT,
 BLOCKED, or STALLED is **unserviced** until you act on it. Before you rest, every lane must be either
-BUSY (spinner running) or serviced this cycle. If the monitor emits the *same* unserviced state for a
-lane twice in a row, you missed it the first time — act now. Two lanes needing attention in the same
+BUSY (spinner running) or serviced this cycle. The W2 monitor exits when any lane needs attention
+(background Bash only reports on exit) — re-arm a fresh one after servicing; if the re-armed monitor
+immediately exits with the *same* unserviced state for a lane, you missed it the first time — act now. Two lanes needing attention in the same
 window is the common case (one finishes as another asks); handle them round-robin, never "I handled
 one, cycle done."
 
@@ -241,7 +281,8 @@ Keep looping until all lanes are complete or a hard escalation. Throughout, keep
   `esc to interrupt`, `thinking`) — **NEVER** the static status bar or the `=== PHASE N DONE ===`
   marker text (matching the marker fires the watcher instantly off the prompt echo). Detect the
   marker separately, after idle.
-- Worker effort is **always `medium`** — re-applied after every `/clear` (Claude Code reverts it).
+- Worker effort is **always `medium`** — on the Claude engine re-applied after every `/clear`
+  (Claude reverts it); on Codex it's the launch flag and persists.
 - **Parallel only for genuinely independent repo lanes.** If phases cross-depend, stay sequential.
   At most one `in_progress` phase PER LANE.
 - GATE before any irreversible/outward-facing phase — explicit human confirmation. Don't trust branch

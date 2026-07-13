@@ -50,7 +50,8 @@ cmux list-workspaces [--window <t>]
 cmux list-panes [--workspace <t>] [--window <t>]
 cmux list-pane-surfaces [--pane <t>] [--workspace <t>]
 cmux list-panels [--workspace <t>]
-cmux current-window | current-workspace
+cmux current-window
+cmux current-workspace
 cmux top [--processes] [--sort cpu|mem|proc] [--flat] [--format tree|tsv]   # per-pane process/resource view
 cmux memory [--all] [--groups <n>]
 cmux identify [--surface <t>] ...                     # what/where is this surface
@@ -120,9 +121,13 @@ cmux trigger-flash [--surface <t>]
 Use these to surface Manager state to the human, especially during AFK runs.
 ```
 cmux set-status <key> <value> [--icon <name>] [--color <#hex>] [--priority <n>]
-cmux clear-status <key>      |  cmux list-status
-cmux set-progress <0.0-1.0> [--label <text>]   |  cmux clear-progress
-cmux log [--level <level>] [--source <name>] <message>   |  cmux list-log [--limit <n>]  |  cmux clear-log
+cmux clear-status <key>
+cmux list-status
+cmux set-progress <0.0-1.0> [--label <text>]
+cmux clear-progress
+cmux log [--level <level>] [--source <name>] <message>
+cmux list-log [--limit <n>]
+cmux clear-log
 ```
 
 ## Sidebar
@@ -141,7 +146,8 @@ cmux hooks <agent> <install|uninstall|event>
 cmux claude-teams [claude-args...]   # launch Claude in a team layout — pass worker model/effort, e.g. cmux claude-teams --model sonnet --effort high
 cmux codex-teams  [codex-args...]    # launch Codex in a team layout
 cmux omo|omx|omc [args...]           # opencode / omx / omc launchers
-cmux restore-session | cmux surface resume <set|show|get|clear>
+cmux restore-session
+cmux surface resume <set|show|get|clear>
 ```
 
 ## Gotchas
@@ -158,9 +164,9 @@ A copy-paste Manager prompt (adapt refs/roles to the current workspace):
 > You are the Manager agent running in my focused cmux pane. I will only talk to you; you coordinate
 > worker panes. Use the REAL cmux CLI (do not invent flags). Keep upfront planning human-led — confirm
 > the plan with me before delegating.
-> 1. Build the layout: `cmux new-split right`, `cmux new-pane`; name tabs `cmux rename-tab "<role>"`.
-> 2. Launch each Claude Code worker: `cmux send --surface surface:N -- "claude --model sonnet --effort high\n"`.
+> 1. Build the layout: `cmux new-split right`, `cmux new-pane`; name tabs `cmux rename-tab --surface surface:N "<role>"` (new panes spawn unfocused — omitting `--surface` renames MY tab).
+> 2. Launch each Claude Code worker: `cmux send --surface surface:N -- 'claude --model sonnet --effort high\n'`.
 > 3. Inspect live state before acting: `cmux --json tree`, `cmux list-panes`.
-> 4. Delegate then read back: `cmux send --surface surface:N -- "<task>\n"`, then `cmux read-screen --surface surface:N`.
+> 4. Delegate then read back: `cmux send --surface surface:N -- '<task>\n'` (always single quotes — double quotes let the shell expand `$()`/`$VAR` in MY pane), then `cmux read-screen --surface surface:N`.
 > 5. You talk to me; workers do the work. Report status; don't let workers drift — re-check `cmux --json tree`.
 > Guardrail: prefer panes over tab groups.
