@@ -73,20 +73,30 @@ Use `origin/$DEFAULT_BRANCH` unless the approved plan explicitly names another b
 If it does, fetch that ref and verify its relationship to the default branch with
 `git merge-base --is-ancestor` before creating the feature branch.
 
+**Create one session directory for the whole run** outside every repo, before touching
+any lane:
+
+```bash
+SESSION_DIR=$(mktemp -d "${TMPDIR:-/tmp}/tgc-orchestrate.XXXXXX")
+```
+
+Keep it for the lifetime of the run; the lane briefs live inside it. When the run ends —
+whether every lane finished, a lane failed, or the user aborted — remove it as the final
+step so temporary briefs never linger:
+
+```bash
+rm -rf "$SESSION_DIR"
+```
+
 For each lane:
 
 1. **Require a clean repo, then branch.** Run `git status --porcelain` and stop on staged,
    unstaged, or untracked work. Create the feature branch off the verified remote base.
    Never work on the default branch; never force-push.
-2. **Create a session directory** outside every repo, then write one lane brief there:
-
-   ```bash
-   SESSION_DIR=$(mktemp -d "${TMPDIR:-/tmp}/tgc-orchestrate.XXXXXX")
-   ```
-
-   Use `<SESSION_DIR>/<lane>-WORKER-BRIEF.md` as the standing orders every phase agent
-   re-reads. Pass its absolute path in every phase prompt and remove the session
-   directory when all lanes finish. Never create cleanup artifacts in the repo root.
+2. **Write the lane brief into the shared session directory.** Use
+   `<SESSION_DIR>/<lane>-WORKER-BRIEF.md` as the standing orders every phase agent
+   re-reads. Pass its absolute path in every phase prompt. Never create cleanup artifacts
+   in the repo root.
 3. **Discover the repo's local gate before writing the brief** — read the
    repo instructions, pre-push hook, and project scripts. Put the complete reproducible
    local gate into the brief. Do not claim that isolated GitHub Actions `run:` lines

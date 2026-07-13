@@ -33,8 +33,18 @@ workflow report completion.
    mismatch. Use its `baseRefName`; without a PR, use the default branch.
 2. Require a clean working tree. Stop and report staged, unstaged, or untracked files
    rather than silently excluding them.
-3. Fetch the resolved base, record `LOOP_BASE=$(git rev-parse HEAD)`, and review
-   `git diff origin/<base>...HEAD` consistently throughout the loop.
+3. Fetch the resolved base and review its diff consistently throughout the loop. Capture
+   the base ref from command output into a shell variable and always reference it quoted —
+   a valid Git ref can contain shell metacharacters (`$(...)`, backticks), and
+   command-substitution output is not re-evaluated, so this cannot inject commands:
+
+   ```bash
+   BASE_REF=$(gh pr view <pr> --json baseRefName --jq .baseRefName \
+     || gh repo view --json defaultBranchRef --jq .defaultBranchRef.name)
+   git fetch origin "$BASE_REF"
+   LOOP_BASE=$(git rev-parse HEAD)
+   git diff "origin/$BASE_REF...HEAD"
+   ```
 4. Create/truncate the passed status file outside the repo:
 
    ```bash
@@ -107,8 +117,12 @@ N=$(git rev-list --count "$LOOP_BASE"..HEAD)
 
 - `N=0`: push normally so a clean but unpublished branch is still published.
 - `N=1`: keep the commit and push normally.
-- `N>1`: `git reset --soft "$LOOP_BASE"`, create one commit using the repo's convention
-  (fallback `fix: address review findings`), then push normally.
+- `N>1`: before rewriting anything, confirm you are still on the branch the loop started
+  on and that `LOOP_BASE` is an ancestor of `HEAD`
+  (`git merge-base --is-ancestor "$LOOP_BASE" HEAD`); if either check fails, stop and
+  report instead of resetting. Otherwise `git reset --soft "$LOOP_BASE"`, create one
+  commit using the repo's convention (fallback `fix: address review findings`), then push
+  normally.
 
 Establish an upstream when the branch has none. Never force-push. If the remote has
 diverged, stop and report it instead of retrying.

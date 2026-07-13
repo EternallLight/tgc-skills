@@ -61,7 +61,8 @@ merges a PR or force-pushes.
 
 ## Requirements
 
-- Claude Code 2.1.172 or newer (the review workflow uses nested subagents).
+- Claude Code 2.1.172 or newer — the review workflow relies on nested subagents, which
+  landed in that release.
 - A Unix-like shell with standard utilities, including `mktemp`.
 - `git` and the [GitHub CLI](https://cli.github.com/) (`gh`), authenticated.
 

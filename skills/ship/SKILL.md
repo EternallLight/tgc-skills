@@ -41,8 +41,12 @@ plus a report.**
 8. **Review loop.** Invoke `tgc-skills:review-loop` on the PR; it reports its heartbeat
    path before dispatching the loop agent.
 9. **Report.** PR URL, loop outcome (clean / max-iterations / non-converging), findings
-   fixed vs dismissed, gate evidence (what passed). End with: "Ready for you to merge.
-   Run `/tgc-skills:merged` after merging for the post-merge checks and cleanup."
+   fixed vs dismissed, gate evidence (what passed), and the current state of the hosted
+   checks (`gh pr checks`). Only reach the ready-to-merge line once those checks are green
+   or the user has explicitly authorised merging despite them; if any are still pending or
+   failing, say so and stop short of the handoff instead. End with:
+   "Ready for you to merge. Run `/tgc-skills:merged` after merging for the post-merge
+   checks and cleanup."
 
 ## Red flags — stop and ask
 

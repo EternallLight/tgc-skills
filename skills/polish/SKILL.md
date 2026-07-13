@@ -25,8 +25,9 @@ sequentially. Fan-out read, fan-in write.
 
 ## Step 1 — Resolve scope
 
-- **No argument:** the current diff — union of `git diff --name-only` and
-  `git diff --cached --name-only`. If empty, fall back to
+- **No argument:** the current work — union of `git diff --name-only`,
+  `git diff --cached --name-only`, and untracked files from
+  `git ls-files --others --exclude-standard`. If all are empty, fall back to
   `git diff --name-only HEAD~1` and say you did.
 - **Path argument:** review that file/directory.
 - Skip files a review can't help: lockfiles, generated code, snapshots, binaries,
