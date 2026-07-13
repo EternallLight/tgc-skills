@@ -9,8 +9,6 @@ Drive a cmux terminal workspace — build pane layouts, name tabs, send work to 
 
 cmux is **agent-first**: it exposes a Unix-socket CLI so an agent can inspect and control the whole window/workspace/pane/surface tree. You don't memorize a GUI; you read the surface and act on it.
 
-Use this whenever the user is controlling cmux panes, splits, tabs, or worker sessions: opening a pane to the right/left/up/down, splitting the terminal, spinning up worker panes, building a manager/worker layout, naming tabs, reading or summarizing another pane, sending commands into another pane, answering Claude or another agent running in another pane, jumping to unread activity, or setting up an AFK check-in loop.
-
 Trigger eagerly even when the user does not say "cmux" but is clearly orchestrating terminal panes: "open a pane", "split the terminal", "the agent in my other tab", "my worker panes", "check the other pane", "send X to the left pane", or "jump to whatever needs input".
 
 ## 0. Gate: are we even in cmux?
@@ -33,7 +31,7 @@ If `$CMUX_SURFACE_ID` is empty, you are **not** in a cmux workspace. Tell the us
 4. **`cmux send` only TYPES text.** To make a worker actually run a command or submit a prompt, end the text with `\n` (Enter). `\n`/`\r` → Enter, `\t` → Tab.
 5. **Prefer panes over tab groups** — tab groups are easy to lose track of.
 6. **Keep upfront planning human-led.** Confirm the layout/plan with the user before fanning out workers.
-7. **Pick the worker model deliberately.** Workers doing well-specified implementation don't need the orchestrator's model tier — a cheaper model with strong reasoning effort (e.g. `claude --model sonnet --effort high`) keeps cost and latency down. This applies only to workers you spawn, never to the Manager pane (you).
+7. **Pick the worker model and effort deliberately.** Workers don't need the orchestrator's model tier — a cheaper model (e.g. `claude --model sonnet`) keeps cost and latency down. Effort follows the task: `high` for open-ended research or investigation; `medium` for well-specified implementation against a locked plan (the `orchestrate-plan` skill mandates this). This applies only to workers you spawn, never to the Manager pane (you).
 
 ## Cheat sheet (the basics — no `cmux help` needed)
 
@@ -81,15 +79,7 @@ cmux read-screen --surface surface:2 --scrollback --lines 200   # deeper history
 ```
 Use `--` before free text so leading dashes/special chars aren't parsed as flags.
 
-**Answer the agent running in a worker pane** (the key cross-pane move):
-```bash
-cmux read-screen --surface surface:2          # 1. SEE the question first
-cmux send --surface surface:2 -- "yes, use option B\n"   # 2a. free-text chat answer
-cmux send-key --surface surface:2 enter       # 2b. TUI menu: confirm
-cmux send-key --surface surface:2 -- "2"      # 2c. pick numbered option
-cmux send-key --surface surface:2 down        # navigate (up|down|enter|tab|ctrl+c ...)
-```
-See **Answering agents in workers** below for chat vs TUI prompt styles.
+**Answer the agent running in a worker pane** (the key cross-pane move): `read-screen` to SEE the question first, then respond — see **Answering agents in workers** below for the chat vs TUI variants.
 
 **Notifications / jump to what needs you:**
 ```bash

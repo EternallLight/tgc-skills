@@ -116,7 +116,7 @@ STALL.
 LANES="surface:21 surface:24"                  # one per repo lane
 busy_re='[0-9]+s ·|esc to interrupt|thinking|processing'
 # input_re: a worker waiting on YOU — TUI menu, confirm, or a trailing question with no spinner.
-input_re='Do you want|❯ ?1[.)]|\b1[.)] (Yes|No)|\(y/n\)|\[y/N\]|Enter to (select|confirm)|? for (shortcuts|agents)'
+input_re='Do you want|❯ ?1[.)]|\b1[.)] (Yes|No)|\(y/n\)|\[y/N\]|Enter to (select|confirm)'
 for i in $(seq 1 160); do                      # ~40 min cap; raise for long runs
   for W in $LANES; do
     s=$(cmux read-screen --surface "$W" 2>/dev/null | tail -16)
