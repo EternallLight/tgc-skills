@@ -1,6 +1,8 @@
 ---
 name: orchestrate
 description: Use when executing a locked implementation plan (PLAN.md or equivalent) that is too big for one context window — "execute the plan", "implement PLAN.md", "orchestrate this implementation", "split the plan into phases and build it". Not for edits you can finish inline.
+disable-model-invocation: true
+argument-hint: "[plan-path]"
 ---
 
 # Orchestrate — execute a plan via fresh-context agents, one phase at a time
@@ -59,26 +61,39 @@ already-approved goal, state the breakdown and proceed.
 
 ## Phase 2 — Repo prep & the brief
 
-**Pick the branch base by topology, not by label** (per repo). The branch named "main"
-is sometimes stale; base on the live trunk:
+**Pick the branch base from the remote** (per repo). Resolve the GitHub default branch
+and fetch its current tip:
 
 ```bash
-git rev-list --count <labelMain>..<candidate>   # candidate ahead of labelMain?
-git rev-list --count <candidate>..<labelMain>   # ...and behind?
+DEFAULT_BRANCH=$(gh repo view --json defaultBranchRef --jq '.defaultBranchRef.name')
+git fetch origin "$DEFAULT_BRANCH"
 ```
+
+Use `origin/$DEFAULT_BRANCH` unless the approved plan explicitly names another base.
+If it does, fetch that ref and verify its relationship to the default branch with
+`git merge-base --is-ancestor` before creating the feature branch.
 
 For each lane:
 
-1. **Create the feature branch** off the verified base. Never work on main/master;
-   never force-push.
-2. **Write `WORKER-BRIEF.md`** in that repo (template below) — standing orders every
-   phase agent re-reads. Keep it untracked; it is never committed.
-3. **Discover the repo's REAL pre-push gate before writing the brief** — read the
-   pre-push hook / husky config / package.json scripts and put the exact full command
-   into the brief's self-verify step. A brief that names a subset lets every phase pass
-   locally and then bounce at push.
+1. **Require a clean repo, then branch.** Run `git status --porcelain` and stop on staged,
+   unstaged, or untracked work. Create the feature branch off the verified remote base.
+   Never work on the default branch; never force-push.
+2. **Create a session directory** outside every repo, then write one lane brief there:
 
-### Brief template (`WORKER-BRIEF.md`)
+   ```bash
+   SESSION_DIR=$(mktemp -d "${TMPDIR:-/tmp}/tgc-orchestrate.XXXXXX")
+   ```
+
+   Use `<SESSION_DIR>/<lane>-WORKER-BRIEF.md` as the standing orders every phase agent
+   re-reads. Pass its absolute path in every phase prompt and remove the session
+   directory when all lanes finish. Never create cleanup artifacts in the repo root.
+3. **Discover the repo's local gate before writing the brief** — read the
+   repo instructions, pre-push hook, and project scripts. Put the complete reproducible
+   local gate into the brief. Do not claim that isolated GitHub Actions `run:` lines
+   reproduce action steps, matrices, services, or external checks. If no local gate
+   exists, say CI is authoritative instead of inventing one.
+
+### Lane brief template
 
 ```markdown
 # Worker Brief — <plan title> — <repo> lane
@@ -90,25 +105,25 @@ You are executing ONE phase of a locked plan with a fresh context. At the start 
 4. Implement ONLY the phase named in your prompt, up to its stated stop point.
 
 ## Ground truth (overrides any stale wording in the plan)
-- Repo: <abs path>. Branch: <feature-branch> (off <verified base>). Never switch
-  branches; never touch main/master; never force-push.
+- Repo: <abs path>. Branch: <feature-branch> (off <verified remote base>). Never switch
+  branches; never touch the default branch; never force-push.
 - Already done / out of scope: <what's committed; what NOT to do>.
 - Contracts this builds against: <pinned API shapes etc.>.
 
 ## Conventions (from the repo's CLAUDE.md / AGENTS.md)
-- Commits: <conventional-commit rules, scopes>.
+- Commits: <repo-documented or recent-log convention; conventional fallback>.
 - <lint / typecheck / test commands>.
 - Code comments must never reference the plan or its scaffolding (no "Phase N",
   "per the plan", banner separators). Comment only non-obvious WHY.
 
 ## Per-phase workflow
 1. Implement the one named phase, up to its stop point.
-2. Self-verify with the repo's FULL pre-push gate: <exact command>. Fix failures;
-   never finish red.
+2. Self-verify with the repo's reproducible local gate: <exact command, or explicit
+   CI-only limitation>. Fix local failures; never claim an unavailable gate passed.
 3. Run a simplification pass over your changes (delete reinvented stdlib, needless
    abstractions) and apply reasonable findings; re-verify if you changed anything.
-4. Commit (conventional message), staging ONLY files you changed. Never commit the
-   plan, this brief, or other planning artifacts.
+4. Commit using the repo's convention, staging ONLY intended files. Never commit this
+   temporary brief. Treat plans and documentation according to the repo and user intent.
 5. Return a short report: what changed, commit hash(es), verification results, any
    watch-items for later phases — then STOP. Do not start the next phase.
 6. If blocked after one real attempt, report `BLOCKED: <reason>` instead.
@@ -120,12 +135,13 @@ For each phase, in lane order:
 
 1. **Dispatch a fresh `general-purpose` agent** with a self-contained prompt:
 
-   > Read the full plan at `<ABSOLUTE PLAN PATH>`, then `WORKER-BRIEF.md` in `<repo>`,
+   > Read the full plan at `<ABSOLUTE PLAN PATH>`, then the lane brief at
+   > `<ABSOLUTE BRIEF PATH>`,
    > then run `git log --oneline -20` to see completed phases. You are on branch
    > `<branch>`; do not switch. Implement ONLY phase `<N>`: `<description>` and stop
    > after `<stop point>`; build nothing beyond it. `<Watch-items from prior phases.>`
-   > Follow the brief's per-phase workflow: full pre-push gate, simplification pass,
-   > conventional commit staging only files you changed. Report what changed, commit
+   > Follow the brief's per-phase workflow: reproducible local gate, simplification
+   > pass, and repo-convention commit staging only intended files. Report what changed, commit
    > hashes, and verification results. Do NOT start the next phase.
 
 2. **On return, verify independently and lightly** — without reading source into your
@@ -134,7 +150,7 @@ For each phase, in lane order:
    ```bash
    git log --oneline -5                         # the phase's commit(s) landed
    git show --stat HEAD | tail -n +2            # only intended files, sane sizes
-   git status --short                           # nothing stray; planning docs untracked
+   git status --short                           # nothing stray or unrelated
    grep -nE '<a key symbol this phase adds>' <changed file>   # narrow spot-check
    ```
 
@@ -160,7 +176,8 @@ Agent calls), verify each on return, advance each lane independently.
   sequential. At most one in-flight phase per lane.
 - GATE before anything irreversible or outward-facing. Don't trust branch labels;
   confirm topology. Don't fake convergence; report real failures.
-- Planning artifacts (the plan, briefs, review logs) stay untracked, always.
+- Temporary briefs and logs live only in the session directory and are removed when the
+  workflow finishes. Plans and repo documentation follow user intent and repo policy.
 
 ## What NOT to do
 

@@ -1,6 +1,7 @@
 ---
 name: polish
-description: Use when the user wants a combined quality pass over changed code — "polish the diff", "polish my changes", "clean up my changes", "run all the reviewers" — before shipping. Diff-scoped by default; accepts an optional path argument.
+description: Use only when the user explicitly asks for a combined quality pass over changed code, or when the active ship workflow invokes it — "polish the diff", "polish my changes", "clean up my changes", "run all the reviewers". Diff-scoped by default; accepts an optional path argument.
+argument-hint: "[path]"
 ---
 
 # Polish
@@ -9,6 +10,10 @@ One combined quality pass over changed code. Fan out three review lenses as
 **findings-only** subagents (they read, they do not edit), merge and dedupe the
 results, **auto-apply only the safe high-confidence findings**, verify the result with
 the repo's own tooling, and hand back the riskier findings for the user to approve.
+
+Proceed only when the surrounding user request explicitly asks for polishing (including
+direct `/tgc-skills:polish` invocation) or `tgc-skills:ship` invokes it. Do not load this
+skill from unrelated requests because polishing can edit files.
 
 This is quality plus safe bug fixes, not a deep security audit.
 
@@ -100,8 +105,8 @@ Do **not** hardcode a command. Discover it, in this order, and run the narrowest
 that applies to the changed files:
 
 1. The repo's `CLAUDE.md` / `AGENTS.md` — a stated lint/typecheck/test command.
-2. `package.json` scripts — prefer `typecheck` / `check` / `lint` (in that order),
-   using the package manager implied by the lockfile.
+2. The pre-push hook and project scripts — prefer the narrowest documented command that
+   covers the files, using the repo's package/build tool.
 3. Language defaults otherwise (`go vet ./...`, `tsc --noEmit`, `cargo check`, …).
 
 If a check fails, identify the offending edit, revert just that edit, and move that

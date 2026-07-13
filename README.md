@@ -2,8 +2,7 @@
 
 A shipping pipeline for [Claude Code](https://docs.anthropic.com/en/docs/claude-code),
 packaged as a plugin. Seven skills that take a change from "locked plan" to "merged and
-cleaned up", using in-session agents — no external reviewer accounts, no infrastructure
-beyond `git` and `gh`.
+cleaned up", using in-session agents and the authenticated GitHub user.
 
 ## The pipeline
 
@@ -16,25 +15,42 @@ orchestrate ──► checkpoint ──► ship ──► review-loop ──► 
 | Skill | What it does |
 |---|---|
 | **orchestrate** | Execute a locked plan too big for one context window: split it into phases, dispatch one fresh subagent per phase, verify each with git plumbing, run independent repos as parallel lanes. |
-| **ship** | The pre-merge pipeline: polish the diff, run the repo's real pre-push gate, commit, push, open a PR, hand it to the review loop. Never merges. |
-| **review-loop** | Review → fix → re-review with independent agent reviewers until clean (max 5 iterations). Commits fixes locally each round, pushes once — squashed into a single commit — at the end. |
-| **review-fix** | One pass of the fix cycle: gather findings from the PR, fix them, gate against branch tip AND the merge commit, commit, push. |
+| **ship** | The pre-merge pipeline: polish the diff, run the repo's reproducible local gate, commit, push, open a PR, hand it to the review loop. Never merges. |
+| **review-loop** | Review → fix → re-review with independent agent reviewers until clean (max 5 iterations). Commits locally each round and pushes once; clean exits are squashed. |
+| **review-fix** | One pass of the fix cycle: gather every page of PR findings, fix them, commit, gate the committed branch and merge tree, push. |
 | **polish** | Three parallel review lenses (correctness, simplification, over-engineering) over the current diff; auto-applies only safe, behavior-preserving findings. |
 | **checkpoint** | Mid-flow quick save: cheap verify, one commit, push, keep going. |
-| **merged** | Post-merge tail: verify the merge, check that DB migrations actually ran, answer the deploy question, delete branches/worktrees, optional release. |
+| **merged** | Post-merge tail: verify the merge, check that DB migrations actually ran, answer the deploy question, safely clean this PR's branch/worktree, optional release. |
 
 Design principles baked in:
 
 - **One phase per context window.** Fresh subagents re-ground from disk instead of
   inheriting lossy summaries.
-- **The orchestrator never reads implementation files** — verification is git plumbing,
-  narrow greps, and throwaway read-only agents.
+- **The orchestrator keeps implementation detail out of its context** — verification is
+  git plumbing, narrow greps, and focused read-only agents.
 - **Merging is always the human's move.** No skill in this repo ever merges a PR.
-- **Gates are the repo's real gates.** Skills read the pre-push hook and CI workflows
-  and run those exact commands — including against the merge commit with the base
-  branch, which is what CI actually builds.
-- **Planning artifacts never get committed.** Plans, briefs, and loop status files stay
-  untracked.
+- **Local gates are reported honestly.** Skills run documented/pre-push commands against
+  the working branch and merge tree. They do not pretend local shell commands reproduce
+  hosted actions, service containers, matrices, or external checks.
+- **Temporary artifacts stay outside repos.** Worker briefs and loop status files use
+  unique paths under the system temporary directory and clean up after themselves.
+
+## Usage and safety
+
+Plugin skills are namespaced. For example:
+
+```text
+/tgc-skills:orchestrate PLAN.md
+/tgc-skills:checkpoint
+/tgc-skills:ship
+/tgc-skills:review-fix 123
+/tgc-skills:merged 123
+```
+
+`orchestrate`, `checkpoint`, `ship`, `review-fix`, and `merged` require explicit slash
+invocation. `polish` and `review-loop` remain composable by the pipeline, but proceed
+only after an explicit request or invocation by an active parent workflow. No skill
+merges a PR or force-pushes.
 
 ## Install
 
@@ -45,9 +61,13 @@ Design principles baked in:
 
 ## Requirements
 
+- Claude Code 2.1.172 or newer (the review workflow uses nested subagents).
+- A Unix-like shell with standard utilities, including `mktemp`.
 - `git` and the [GitHub CLI](https://cli.github.com/) (`gh`), authenticated.
-- Nothing else. Reviews run as in-session agents; pushes and PR comments come from
-  your own GitHub user.
+
+This plugin targets GitHub repositories. Hosted CI and external checks remain
+authoritative when a repository does not expose a reproducible local gate. Pushes and PR
+comments come from your authenticated GitHub user.
 
 ## License
 

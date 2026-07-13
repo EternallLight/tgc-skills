@@ -1,125 +1,123 @@
 ---
 name: review-loop
-description: Use when a branch or PR should be reviewed, fixed, and re-reviewed automatically until clean — "run the review loop", "review and fix until it passes", "loop review on this PR". Runs in a subagent to keep the main context clean.
+description: Use only when the user explicitly asks to review, fix, and re-review a branch or PR until clean, or when an active ship/checkpoint workflow invokes it — "run the review loop", "review and fix until it passes", "loop review on this PR".
+argument-hint: "[PR URL|branch]"
 ---
 
 # Review Loop — review → fix → re-review until clean
 
-An automated cycle: independent reviewer agents review the branch diff, a fixer applies
-the legitimate findings, and the loop re-reviews until the reviewers approve with no
-critical issues. Everything runs **in-session with agents** — no external reviewer
-accounts, no GitHub user switching. Fixes are committed locally each iteration and
-**pushed once, squashed into a single commit, at the end**.
+Proceed only when the surrounding user request explicitly asks for the loop (including
+direct `/tgc-skills:review-loop` invocation) or `tgc-skills:ship`/`tgc-skills:checkpoint`
+invokes it. It commits fixes and pushes once, so stop without that authorization.
 
-## Arguments
+Review the branch diff with independent agents, fix legitimate findings, and repeat
+until clean or a stop condition is reached. Never merge the PR.
 
-- **PR URL or branch** (optional). Defaults to the current branch; if a PR exists for
-  it (`gh pr view`), the loop posts its closing summary there.
+## Keep the loop out of the main context
 
-## Workflow
+Create `STATUS=$(mktemp "${TMPDIR:-/tmp}/tgc-review-loop.XXXXXX")` and tell the user
+that progress is visible there. Then launch one `general-purpose` subagent with the repo
+path, optional PR/branch argument, status path, and the complete workflow below. The main
+context manages only the dispatch and final report. Subagents may start in the
+background; explicitly wait for this one to finish before returning or letting a parent
+workflow report completion.
 
-Launch a **single `general-purpose` subagent** with these instructions (pass it the
-PR URL / branch and repo path):
+## Subagent workflow
 
+### Setup and heartbeat
+
+1. Resolve the local `nameWithOwner`, current branch, and GitHub default branch. Stop if
+   the current branch is the default branch. Require a supplied branch argument to equal
+   the current branch. If a PR is supplied or detected, require its URL repository to
+   match `nameWithOwner` and its `headRefName` to match the current branch. Stop on any
+   mismatch. Use its `baseRefName`; without a PR, use the default branch.
+2. Require a clean working tree. Stop and report staged, unstaged, or untracked files
+   rather than silently excluding them.
+3. Fetch the resolved base, record `LOOP_BASE=$(git rev-parse HEAD)`, and review
+   `git diff origin/<base>...HEAD` consistently throughout the loop.
+4. Create/truncate the passed status file outside the repo:
+
+   ```bash
+   STATUS="<passed status path>"
+   : > "$STATUS"
+   ```
+
+5. Append one timestamped line when the loop starts and after every state change: review
+   dispatched, verdicts received, fixing, committed, and exit. Remove only this file
+   after the closing report/comment.
+
+## Loop — at most five iterations
+
+### 1. Review with two independent agents
+
+Dispatch both reviewers concurrently. Give each the branch, base, diff scope, and enough
+surrounding file context to judge. They report findings only and never edit.
+
+- **Correctness and security:** logic errors, races, crash-level edge cases, security
+  vulnerabilities, data corruption, and breaking API changes. Ignore style.
+- **Robustness and quality:** error handling, resource leaks, realistic-input failures,
+  misleading names/comments, and test gaps that hide those defects. Ignore formatting
+  and linter findings.
+
+Require exactly:
+
+```text
+VERDICT: APPROVE | REQUEST_CHANGES
+CRITICAL_ISSUES:
+- [file:line] description
+MINOR_ISSUES:
+- [file:line] description
 ```
-You are running an automated review-fix loop on branch <branch> (base <base>).
-
-## Heartbeat (do this FIRST, and after every state change)
-
-Maintain a status file at `.review-loop-status` in the repo root (untracked; delete on
-exit). APPEND one timestamped line per state change:
-
-  echo "$(date +%H:%M) iter 2: 3 findings, fixing" >> .review-loop-status
-
-Log at minimum: loop started, review dispatched, verdicts received, fixing (N findings),
-committed, and the exit line. Long silence is indistinguishable from a hang — don't go
-quiet.
-
-## Setup
-
-1. Record the starting point: `LOOP_BASE=$(git rev-parse HEAD)`.
-2. Determine the diff scope: `git diff <base>...HEAD` (the PR's base branch, or the
-   branch point from the trunk).
-
-## Loop (max 5 iterations)
-
-### 1. Review — two independent reviewer agents in parallel
-
-Dispatch two agents in ONE message so they run concurrently. Both get the branch, base,
-and instruction to review `git diff <base>...HEAD` plus enough surrounding file context
-to judge. Different lenses so they don't just duplicate each other:
-
-- **Reviewer A (correctness & security):** logic errors, race conditions, unhandled
-  edge cases that crash, security vulnerabilities, data corruption, breaking API
-  changes. Ignore style.
-- **Reviewer B (robustness & quality):** error handling, resource leaks, wrong
-  behavior under realistic inputs, misleading naming/comments, test gaps that hide
-  the above. Ignore formatting nits and anything CI's linter will catch.
-
-Each returns exactly:
-
-    VERDICT: APPROVE | REQUEST_CHANGES
-    CRITICAL_ISSUES:
-    - [file:line] description
-    MINOR_ISSUES:
-    - [file:line] description
 
 ### 2. Combine and judge
 
-- Dedupe (same file + same bug = one finding; keep the clearer wording).
-- **DONE** when neither reviewer has critical issues AND every minor finding for the
-  CURRENT tree is either fixed or explicitly dismissed with a one-line reason
-  (intentional / stale / not worth it). Record every dismissal.
-- Verify stale findings against the current tree before acting — an earlier iteration
-  may have moved the file.
+- Dedupe the same bug at the same location, keeping the clearest wording.
+- Finish clean when neither reviewer has a critical issue and every minor finding for
+  the current tree is fixed or dismissed with a recorded one-line reason.
+- Verify every finding against the current tree before acting; prior iterations may
+  have moved or removed the referenced code.
 
-### 3. Fix
+### 3. Fix and verify
 
-Apply the legitimate findings (critical first). Read each referenced location, fix with
-judgment; skip-with-reason anything ambiguous or requiring an architectural change.
-Then run the repo's FULL pre-push gate (the exact command its pre-push hook / CI
-workflows run — read them, don't guess). Fix failures. Commit locally, staging only the
-files you changed, with a conventional message. Do NOT push yet. Go back to step 1.
+Apply legitimate findings, critical first. Trace callers and fix the root cause. Skip
+ambiguous or architecture/product decisions with a reason.
 
-### 4. Exit conditions
+Discover and run the repo's reproducible local gate from its instructions, pre-push
+hook, and project scripts. Do not claim isolated workflow `run:` lines reproduce action
+steps, matrices, services, or external checks. Fix local failures, stage only intended
+files, and commit using the repo's convention with a conventional fallback. Do not push.
+Then return to review.
 
-- **clean** — reviewers approve, minors resolved → squash & push (step 5).
-- **max-iterations** — 5 iterations reached → push commits AS-IS (no squash), report
-  what remains.
-- **non-converging** — the same findings survive 2 consecutive fix iterations → stop,
-  push as-is, report the disagreement for the human to settle.
+### 4. Stop conditions
 
-### 5. Squash & push (clean exit only)
+- **clean:** reviewers approve and minors are resolved → finish through squash/push.
+- **max-iterations:** five iterations reached → push loop commits as-is and report what
+  remains.
+- **non-converging:** the same finding survives two consecutive fix iterations → push
+  loop commits as-is and report the disagreement for the user.
+- **branch diverged:** the remote changed during the loop → stop without force-pushing.
 
-Squash everything the loop committed into ONE commit:
+## Clean exit: squash and push once
 
-    N=$(git rev-list --count $LOOP_BASE..HEAD)
-    # N <= 1 → nothing to squash, just push.
-    git reset --soft $LOOP_BASE
-    git commit -m "fix: address review findings"
-    git push   # add --force-with-lease ONLY if loop commits were already on the remote
+Count only commits created after `LOOP_BASE`:
 
-Never plain `--force`. If a force-with-lease push is rejected, the branch diverged —
-stop and report; do not retry harder.
-
-### 6. Closing summary (every exit path)
-
-If a PR exists, post ONE comment: outcome (clean / max-iterations / non-converging),
-iterations, findings fixed, findings dismissed with reasons, and what remains if not
-clean. Never post per-iteration comments. Then delete `.review-loop-status`.
-
-## Report back
-
-Return: iterations run, findings fixed, dismissals + reasons, final verdict per
-reviewer, anything unresolved.
+```bash
+N=$(git rev-list --count "$LOOP_BASE"..HEAD)
 ```
 
-## Important notes
+- `N=0`: push normally so a clean but unpublished branch is still published.
+- `N=1`: keep the commit and push normally.
+- `N>1`: `git reset --soft "$LOOP_BASE"`, create one commit using the repo's convention
+  (fallback `fix: address review findings`), then push normally.
 
-- **Always run the loop in a subagent** — the point is keeping the main conversation
-  clean. Tell the user immediately where the heartbeat is:
-  "progress: `tail -f <repo>/.review-loop-status`". If asked "is it frozen?", read that
-  file and answer from it.
-- The loop never merges the PR. Merging is always the human's move.
-- One push per loop run (squashed), from the current authenticated user. No account
-  switching anywhere.
+Establish an upstream when the branch has none. Never force-push. If the remote has
+diverged, stop and report it instead of retrying.
+
+## Closing report
+
+If a PR exists, post one comment containing outcome, iterations, fixed findings,
+dismissals with reasons, local gate evidence, and unresolved items. Never post
+per-iteration comments.
+
+Return the same facts to the caller, include both final reviewer verdicts, then remove
+the session status file. Merging remains the user's action.
