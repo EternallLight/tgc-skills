@@ -1,0 +1,15 @@
+{
+  "name": "tgc-skills",
+  "description": "Shipping-pipeline skills for Claude Code: plan orchestration with fresh-context agents, diff polish, ship-to-PR, agent review-fix loop, and post-merge cleanup.",
+  "owner": {
+    "name": "Andrey Gruniov",
+    "url": "https://github.com/EternallLight"
+  },
+  "plugins": [
+    {
+      "name": "tgc-skills",
+      "source": "./",
+      "description": "A shipping pipeline for Claude Code: orchestrate a locked plan with fresh-context agents, polish the diff, ship it to a reviewed PR, run an agent review-fix loop until clean, and clean up after merge."
+    }
+  ]
+}

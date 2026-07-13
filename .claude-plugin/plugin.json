@@ -1,0 +1,13 @@
+{
+  "name": "tgc-skills",
+  "description": "A shipping pipeline for Claude Code: orchestrate a locked plan with fresh-context agents, polish the diff, ship it to a reviewed PR, run an agent review-fix loop until clean, and clean up after merge.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Andrey Gruniov",
+    "url": "https://github.com/EternallLight"
+  },
+  "homepage": "https://github.com/EternallLight/tgc-skills",
+  "repository": "https://github.com/EternallLight/tgc-skills",
+  "license": "MIT",
+  "keywords": ["orchestration", "code-review", "shipping", "pipeline", "agents", "pr", "workflow"]
+}
