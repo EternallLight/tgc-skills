@@ -1,5 +1,9 @@
 # tgc-skills
 
+<p align="center">
+  <img src="assets/hero.png" alt="The Gray Cat, a chunky British Shorthair, at a tidy programmer's desk — each tool a skill in the shipping pipeline" width="100%">
+</p>
+
 A shipping pipeline for [Claude Code](https://docs.anthropic.com/en/docs/claude-code),
 packaged as a plugin. Seven skills that take a change from "locked plan" to "merged and
 cleaned up", using in-session agents and the authenticated GitHub user.
