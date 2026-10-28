@@ -16,10 +16,13 @@ Trigger eagerly even when the user does not say "cmux" but is clearly orchestrat
 Before running any `cmux` command, confirm the environment:
 
 ```bash
-[ -n "$CMUX_SURFACE_ID" ] && echo "in cmux: surface $CMUX_SURFACE_ID" || echo "NOT in cmux"
+sh "${CLAUDE_PLUGIN_ROOT}/scripts/detect-backend.sh"
 ```
 
-If `$CMUX_SURFACE_ID` is empty, you are **not** in a cmux workspace. Tell the user, and do not run cmux orchestration commands. (`cmux` may still launch a *new* workspace via `cmux <path>`, but pane/surface control assumes you're inside one.)
+- `cmux` → continue.
+- `herdr` → you are in a herdr pane (possibly nested inside cmux); use `tgc-skills:herdr-orchestrate` instead.
+- `orca` → you are in an Orca terminal; use Orca's own `orca-cli` and `orchestration` skills (`orca skills install --skill orca-cli --skill orchestration`).
+- `none` → you are **not** in a cmux workspace. Tell the user, and do not run cmux orchestration commands. (`cmux` may still launch a *new* workspace via `cmux <path>`, but pane/surface control assumes you're inside one.)
 
 `$CMUX_SURFACE_ID` is **this pane** (where you're running). That's how you tell yourself apart from workers.
 
@@ -32,7 +35,7 @@ If `$CMUX_SURFACE_ID` is empty, you are **not** in a cmux workspace. Tell the us
 5. **Single-quote free text — never double-quote it.** Always pass task text as `-- '<task>'`. Inside double quotes the shell expands `$()`, backticks, and `$VAR` in YOUR (manager) shell before cmux ever sees the text — command injection and credential leakage. If the text itself needs a single quote, rephrase to avoid it (e.g. `don't` → `do not`).
 6. **Prefer panes over tab groups** — tab groups are easy to lose track of.
 7. **Keep upfront planning human-led.** Confirm the layout/plan with the user before fanning out workers.
-8. **Pick the worker model and effort deliberately.** Workers don't need the orchestrator's model tier — a cheaper model (e.g. `claude --model sonnet`) keeps cost and latency down. Effort follows the task: `high` for open-ended research or investigation; `medium` for well-specified implementation against a locked plan (the `orchestrate-plan` skill mandates this). This applies only to workers you spawn, never to the Manager pane (you).
+8. **Pick the worker model and effort deliberately.** Workers don't need the orchestrator's model tier — a cheaper model (e.g. `claude --model sonnet`) keeps cost and latency down. Effort follows the task: `high` for open-ended research, investigation, and locked-plan implementation (what `orchestrate-plan` uses); `medium` only for small, fully specified edits. This applies only to workers you spawn, never to the Manager pane (you).
 
 ## Cheat sheet (the basics — no `cmux help` needed)
 

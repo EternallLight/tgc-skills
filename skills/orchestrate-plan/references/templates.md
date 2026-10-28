@@ -1,137 +1,151 @@
-# orchestrate-plan — verbatim templates
+# orchestrate-plan — templates
 
 Copy-paste artifacts for the SKILL.md phases. Fill the `<…>` placeholders. The unit of work is a
 **phase** (context-window-sized, may be several commits), not a single-commit task.
 
+**Pick by backend:**
+
+| Backend | Brief | Per-phase prompt | Wait | Verify |
+|---|---|---|---|---|
+| Orca | T1 + Orca variant | T3 | W3 in `orca.md` | V1 |
+| herdr | T1 | T2 | W0 in `herdr.md` (W2 as fallback) | V1 |
+| cmux | T1 | T2 | W1 in `cmux.md` (single lane) or W2 | V1 |
+
 ---
 
-## T1 — `WORKER-BRIEF.md` (standing orders, re-read by the worker every phase)
+## T1 — `WORKER-BRIEF.md` (standing orders, re-read every phase)
 
-Because the worker is `/clear`ed before each phase, this file IS its memory. Write it as complete
-standing orders, not a one-time intro. Keep it untracked in the repo root. Write ONE brief per repo
-lane (each parallel worker reads its own).
+Each phase starts on a fresh context, so this file is the worker's memory. Write it as complete
+standing orders, one per lane, in that lane's worktree root. It stays untracked and is never
+committed.
 
 ```markdown
-# Worker Brief — <project / plan title> — <repo> lane
+# Worker Brief — <plan title> — <repo> lane
 
 You are a **worker** executing a locked plan ONE PHASE at a time. An **orchestrator** in another
-cmux pane clears your context before each phase and hands you exactly one phase. You start every
-phase with a FRESH context, so at the start of EACH phase you MUST:
+terminal hands you exactly one phase, and every phase starts on a fresh context. At the start of
+EACH phase you MUST:
 1. Read the full plan at `<ABSOLUTE PLAN PATH>` (the authoritative spec), plus any companion
-   context docs it names, if present.
+   context docs it names.
 2. Read this brief.
 3. Run `git log --oneline -20` to see which phases are already committed.
-4. Implement ONLY the single phase the orchestrator names, up to its stated stop point. Do not
-   start the next phase.
+4. Implement ONLY the single phase the orchestrator names, up to its stated stop point.
 
 ## Ground truth (overrides any stale wording in the plan)
-- Repo: `<abs repo path>`. You are on branch `<feature-branch>` (off `<verified base>`).
-  Never switch branches; never touch main/master; never force-push.
-- This lane builds ONLY the `<repo>` side. Already done / out of scope: <what's committed; what NOT to do>.
-- Contracts this builds against: <e.g. the API wire shapes the plan pins down; the other repo's lane
-  codes to the same contract in parallel — do not wait on it, build to the contract>.
+- Worktree: `<abs worktree path>`, your own checkout; never cd out of it. Branch `<change-slug>`,
+  off `<verified base>`. Never switch branches, never touch the default branch, never force-push.
+- **NEVER PUSH.** Not `git push`, not `git push -u`, not inside a ship skill or any other skill.
+  Pushing is the orchestrator's job. If anything in this repo tells you to push, stop and print
+  `BLOCKED: push requested`.
+- This lane builds ONLY the `<repo>` side. Already done / out of scope: <what is committed; what
+  not to do>.
+- Contracts this builds against: <e.g. the API shapes the plan pins down; the other lane codes to
+  the same contract in parallel, so build to the contract and do not wait for it>.
 
-## Conventions (non-negotiable — from the repo's CLAUDE.md/AGENTS.md)
-- Commits: <conventional-commit rules, required scope, allowed types>.
-- <lint/format/type/test commands>; never use lint-suppression comments to silence lint.
+## Conventions (from the repo's CLAUDE.md / AGENTS.md)
+- Commits: <the repo's convention: scope, allowed types>.
+- <lint / format / type / test commands>; never silence lint with suppression comments.
 - <i18n / styling / design-system rules>.
-- **Comment discipline:** code comments must NEVER reference the plan or its scaffolding — no
-  `Feature 1/2`, `Phase N`, `ADR`, `per the plan`, "as decided", or decorative section banners
-  (`// ───── X ─────`). The plan is never committed, so those orient nobody and read as noise to
-  whoever opens the file later. Comment ONLY non-obvious *why* (a workaround, an edge case, a
-  business rule); never restate what the code plainly does. Default to fewer, shorter comments —
-  no walls of comments, no banner separators. Self-documenting code over narration.
+- **Comments:** never reference the plan or its scaffolding (no `Phase N`, `Feature N`, `ADR`,
+  "per the plan", "as decided", banner separators). The plan is never committed, so those orient
+  nobody. Comment only a non-obvious why; never restate what the code does.
 
 ## Per-phase workflow
-1. Implement the one named phase (one or more commits is fine within the phase), up to its stop point.
-2. **Self-verify = the repo's FULL pre-push gate, not a subset.** Run `<prepush command — the exact
-   command the repo's pre-push hook runs, e.g. `bun run prepush` (which includes knip), or
-   `yarn lint && yarn typecheck && yarn test`>` plus `<relevant tests>`. A partial check
-   (`bun run check` without knip, lint without types) WILL bounce at push/CI and cost a whole
-   fix-up round. Fix failures. Never finish with red checks.
-3. **Run a simplification pass over your changes and apply any reasonable findings**
-   (delete reinvented stdlib, drop needless deps/abstractions, simplify). Re-run self-verify if you
-   changed anything. Skip only findings that are clearly wrong, and say why in your summary.
-4. Commit (conventional message, correct scope), staging ONLY files you changed. Do NOT commit
-   the plan, this brief, or any other planning artifacts.
-5. Print a one-line summary (what changed, commit hash(es), verification + simplification results,
-   any watch-item for downstream phases), then on its OWN final line print exactly:
+1. Implement the one named phase (one or more commits), up to its stop point.
+2. **Self-verify with the repo's FULL pre-push gate**, not a subset: `<exact command the pre-push
+   hook or CI-equivalent script runs>` plus `<relevant tests>`. A partial check bounces at push.
+   Fix failures. Never finish with red checks.
+3. **Run a simplification pass over your changes** and apply reasonable findings (delete
+   reinvented stdlib, needless dependencies and abstractions). Re-verify if anything changed. Say
+   why for any finding you skip.
+4. Commit with the repo's convention, staging ONLY files you changed. Never commit the plan, this
+   brief, or other planning artifacts.
+5. Print a one-line summary (what changed, commit hashes, verification and simplification
+   results, any watch-item for later phases), then on its OWN final line print exactly:
    `=== PHASE <N> DONE ===`
 6. STOP. Do not start the next phase.
-7. If blocked after one real attempt, print `BLOCKED: <reason>` and stop (do NOT print the DONE marker).
+7. If blocked after one real attempt, print `BLOCKED: <reason>` and stop, without the DONE marker.
+```
+
+**Orca variant.** Orca injects a lifecycle preamble with the task and dispatch ids, so the worker
+reports through typed messages instead of printed lines:
+
+- Step 5: print the summary, then report once with
+  `orca orchestration send --type worker_done --subject '<status>' --body '<what changed, findings,
+  what remains>' --task-id <task_id> --dispatch-id <dispatch_id> --outcome succeeded
+  --files-modified 'path/a,path/b' --json`, using the ids from the preamble, never invented ones.
+  Single-quote every text value and keep apostrophes out of it, so your shell expands nothing.
+- Step 7: send the same message with `--outcome failed` (never encode failure only in prose), or
+  ask with `orca orchestration ask --question '<question>' --options '<csv>' --timeout-ms 600000
+  --json` when an orchestrator decision unblocks you. A timed-out ask stays pending: resume it with
+  `--resume <message_id>`, never re-ask.
+- `BLOCKED: push requested` becomes a `worker_done` with `--outcome failed` and that reason.
+
+---
+
+## T2 — per-phase prompt (herdr and cmux)
+
+Single line, **no apostrophes, double quotes, or tabs**, so it survives shell quoting and never
+accepts ghost autocomplete. It MUST carry the absolute plan path and this phase's scope and stop
+point. If a detail genuinely needs a quote character, put it in the brief and reference the brief.
+
+```
+Fresh context. First read the full plan at <ABSOLUTE PLAN PATH>, then WORKER-BRIEF.md in this worktree, then run git log --oneline -20 to see completed phases. You are on the correct branch; do not switch, and never push. Implement ONLY phase <N>: <phase scope> and stop after <explicit stop point>; build nothing beyond it. <Watch-items from prior phases.> Keep code comments free of any plan or phase references (no Feature N, Phase N, ADR, per-the-plan, or banner comments) and comment only a non-obvious why. Self-verify with the full pre-push gate <command> plus <tests>, then run a simplification pass over your changes and apply reasonable findings (re-verify if anything changed). Commit with the repo convention, staging only files you changed. Print a short summary then, on its own final line, print exactly === PHASE <N> DONE ===. Then STOP. Do NOT start the next phase.
+```
+
+Send it with the backend's Send a prompt command.
+
+---
+
+## T3 — Orca task spec (replaces T2 on Orca)
+
+Goes into `task-create --spec` from a file, as `orca.md` shows; Orca delivers it with the lifecycle
+preamble. Passed that way, punctuation and newlines are fine. It must still be self-contained,
+because every phase runs in a brand-new worker process.
+
+```
+Fresh context. First read the full plan at <ABSOLUTE PLAN PATH>, then WORKER-BRIEF.md in this
+worktree, then run `git log --oneline -20` to see completed phases. You are on the correct branch;
+do not switch, and never push.
+
+Implement ONLY phase <N>: <phase scope>. Stop after <explicit stop point>; build nothing beyond
+it. <Watch-items from prior phases.>
+
+Keep code comments free of any plan or phase references (no "Feature N", "Phase N", "ADR",
+"per the plan", or banner comments); comment only a non-obvious why.
+
+Self-verify with the repo's full pre-push gate, <exact command>, plus <tests>. Then run a
+simplification pass over your changes and apply reasonable findings (re-verify if anything
+changed). Commit with the repo's convention, staging only files you changed; never stage the plan
+or the brief.
+
+Report completion with one worker_done message as WORKER-BRIEF.md describes. Then STOP; do not
+start the next phase.
 ```
 
 ---
 
-## T2 — per-phase prompt (sent after `/clear`; self-contained)
+## W2 — multi-lane screen monitor (cmux, or herdr without agent state)
 
-Single line, **no apostrophes / double-quotes / tabs** (so it survives shell quoting and won't trigger
-ghost-autocomplete). It MUST contain the **absolute plan path** and **this phase's description +
-stop point**. Keep `<N>` numeric. If a path, command, or description genuinely needs a quote
-character, don't fight the quoting — put that detail in `WORKER-BRIEF.md` (the worker re-reads it
-from disk every phase) and have the prompt reference the brief instead.
-
-```
-Fresh context. First read the full plan at <ABSOLUTE PLAN PATH>, then WORKER-BRIEF.md in this repo, then run git log --oneline -20 to see completed phases. You are on the correct branch; do not switch. Implement ONLY phase <N>: <phase description — the concrete scope> and stop after <explicit stop point>; build nothing beyond it. <Any watch-items from prior phases.> Keep code comments compact and free of any plan or phase references (no Feature N, Phase N, ADR, per-the-plan, or banner-separator comments) and comment only non-obvious why. Self-verify with the repos FULL pre-push gate <prepush command> plus <tests>, then run a simplification pass over your changes and apply any reasonable findings (re-verify if you changed anything). Commit with a conventional message (scope <scope>), staging only files you changed. Print a short summary then, on its own final line, print exactly === PHASE <N> DONE ===. Then STOP. Do NOT start the next phase.
-```
-
-Send it, then submit with a SEPARATE Enter:
-```bash
-cmux send --surface "$W" -- '<the prompt above>'
-cmux send-key --surface "$W" enter
-cmux read-screen --surface "$W" | tail -6     # confirm spinner running
-```
-
----
-
-## W1 — idle watcher (single lane; background; wakes you when the worker is done or waiting)
-
-Keys ONLY on ephemeral spinner text — never the static status bar (`✓ Bash ×N`) and **never** the
-`=== PHASE N DONE ===` marker text (it sits in the prompt echo and would fire instantly). Run with
-`run_in_background: true`.
+Set the lane list with the backend file's `set --` line, define its `read_lane`, set `done_re` to the marker your brief
+prints, and run with `run_in_background: true`. Background Bash reports only when the task exits,
+so the monitor **exits as soon as any lane needs attention**, printing every lane's status.
+Service every non-BUSY lane, then re-arm a fresh monitor.
 
 ```bash
+done_re='^[^[:alnum:]=]*=== PHASE [0-9]+ DONE ===[[:space:]]*$'
 busy_re='[0-9]+s ·|esc to interrupt|thinking'
-idle=0
-for i in $(seq 1 160); do                      # 160 * 15s = 40 min cap
-  s=$(cmux read-screen --surface "$W" 2>/dev/null | tail -12)
-  if printf '%s' "$s" | grep -qE "$busy_re"; then idle=0; else idle=$((idle+1)); fi
-  if [ $idle -ge 3 ]; then echo "EVENT=idle :: worker quiet ~45s (phase done or waiting)"; break; fi
-  sleep 15
-done
-echo "WATCHER_EXIT iter=$i idle=$idle"
-```
-After it fires, read the tail and check for `=== PHASE N DONE ===` vs `BLOCKED:` vs a question.
-
----
-
-## W2 — multi-pane monitor (parallel lanes; poll all workers ~every 45s)
-
-For 2+ lanes, poll every pane each cycle. Run with `run_in_background: true`. **Background Bash
-only delivers output when the task EXITS** — you would never see per-cycle lines from a loop that
-keeps running — so the monitor **exits as soon as ANY lane needs attention**, printing every lane's
-current status. Service ALL non-BUSY lanes it reported, then **re-arm a fresh monitor**. It only
-flags WHICH lanes to look at — it is a wakeup, not a verdict. **Always `read-screen` the specific
-pane yourself and re-classify before acting** (Phase 4 rule). The order of tests below IS the
-priority order: NEEDS-INPUT before DONE before BLOCKED before STALL.
-
-```bash
-LANES="surface:21 surface:24"                  # one per repo lane
-busy_re='[0-9]+s ·|esc to interrupt|thinking'
-# input_re: a worker waiting on YOU — TUI menu, confirm, or a trailing question with no spinner.
 input_re='Do you want|❯ ?1[.)]|\b1[.)] (Yes|No)|\(y/n\)|\[y/N\]|Enter to (select|confirm)'
-for i in $(seq 1 160); do                      # 160 × 45s ≈ 2 h cap; raise for long runs
+for i in $(seq 1 160); do
   attn=0; out=""
-  for W in $LANES; do
-    s=$(cmux read-screen --surface "$W" 2>/dev/null | tail -16)
+  for W in "$@"; do
+    s=$(read_lane "$W")
     busy=0; printf '%s' "$s" | grep -qE "$busy_re" && busy=1
-    # DONE/BLOCKED require busy=0: while the spinner runs, marker text in view is just the
-    # prompt echo ("print exactly === PHASE N DONE ===") — a running worker is never DONE.
     if   [ $busy -eq 0 ] && printf '%s' "$s" | grep -qE "$input_re"; then st=NEEDS_INPUT
-    elif [ $busy -eq 0 ] && printf '%s' "$s" | grep -qE '^=== PHASE [0-9]+ DONE ==='; then st=DONE
-    elif [ $busy -eq 0 ] && printf '%s' "$s" | grep -qE '^BLOCKED:'; then st=BLOCKED
+    elif [ $busy -eq 0 ] && printf '%s' "$s" | grep -qE "$done_re"; then st=DONE
+    elif [ $busy -eq 0 ] && printf '%s' "$s" | grep -qE '^[^[:alnum:]]*BLOCKED:'; then st=BLOCKED
     elif [ $busy -eq 1 ]; then st=BUSY
-    else st=STALL; fi                            # quiet, no marker, no prompt → nudge (crash/finish-stall)
+    else st=STALL; fi
     out="$out
 LANE=$W status=$st"
     [ "$st" != BUSY ] && attn=1
@@ -139,53 +153,49 @@ LANE=$W status=$st"
   if [ $attn -eq 1 ]; then echo "EVENT=attention$out"; exit 0; fi
   sleep 45
 done
-echo "EVENT=timeout — all lanes stayed BUSY for the whole cap; sweep them and re-arm"
+echo "EVENT=timeout: all lanes stayed BUSY for the whole cap; sweep them and re-arm"
 ```
-Per SKILL Phase 4 (priority order): **NEEDS_INPUT → read the prompt and answer if safe, else `cmux
-notify` the human (act FIRST — the worker is fully stalled);** DONE → verify + advance; BLOCKED →
-resolve or escalate; STALL → `please continue` (or re-send the phase prompt if it lost its task); BUSY
-→ leave it. Keep a per-lane ledger: a lane is *unserviced* until you act; if a freshly re-armed
-monitor immediately exits with the same non-BUSY status you thought you serviced, you missed it —
-act now. The regexes only narrow your attention — confirm by reading the pane.
-(`input_re`/`busy_re` are heuristics; tune them to the worker engine's actual spinner + prompt
-glyphs — e.g. drop or tighten `thinking` if ordinary output false-matches it as BUSY — and never
-let `busy_re` match the `=== PHASE N DONE ===` text or the static status bar. The `\b` in
-`input_re` is a GNU/BSD grep extension, not POSIX — fine on macOS/Linux.)
+
+- The test order is the priority order: NEEDS_INPUT, then DONE, then BLOCKED, then STALL.
+- DONE and BLOCKED require an idle spinner: while a worker runs, marker text on screen is only the
+  echo of the prompt that asked for it.
+- `STALL` means quiet with no marker, prompt, or `BLOCKED:` line: a crash, an API error, or a
+  finish-stall. Nudge it.
+- The cap is 160 × 45 s, about two hours; raise it for long runs.
+- The regexes are heuristics that only narrow your attention. Tune them to the engine's real
+  spinner and prompt glyphs, never let `busy_re` match the done marker or the static status bar,
+  and confirm by reading the pane yourself. `\b` is a GNU/BSD grep extension, fine on macOS and
+  Linux.
+- If a re-armed monitor exits at once with the same non-BUSY status for a lane you thought you
+  serviced, you missed it. Act now.
 
 ---
 
-## V1 — light, context-clean verification (orchestrator side)
+## V1 — light, context-clean verification
 
-Confirm a phase without reading source into your window.
+Confirm a phase without reading source into your window:
 
 ```bash
-cd <repo>
-git log --oneline <base>..HEAD | head -20           # ALL commits since the recorded baseline — not just HEAD
-git diff --name-status <base>..HEAD                 # EVERY changed path since baseline — only intended files
-git show --stat --oneline HEAD | tail -n +2         # the newest phase commit in detail
-git status --short | grep -vE '^\?\? (PLAN\.md|WORKER-BRIEF\.md|REVIEW[^/ ]*\.md)$'   # nothing stray
-grep -nE '<a key symbol this phase should add>' <changed file>     # narrow spot-check
+git -C '<worktree>' log --oneline <base>..HEAD | head -20
+git -C '<worktree>' diff --name-status <base>..HEAD
+git -C '<worktree>' show --stat --oneline HEAD | tail -n +2
+git -C '<worktree>' status --short | grep -vE '^\?\? (PLAN\.md|WORKER-BRIEF\.md|REVIEW[^/ ]*\.md)$'
+grep -nE '<a key symbol this phase should add>' '<worktree>/<changed file>'
 ```
-The status filter hides ONLY *untracked* (`?? `) planning files by exact name — a planning file that
-somehow got staged or modified still shows up, which is exactly what you want to catch. Adjust the
-filenames to the exact planning artifacts in use.
-`<base>` is the LITERAL baseline hash recorded in Phase 2 step 1 (inline it — shell variables set in
-an earlier tool call don't exist here, and an unset `$BASE` silently degrades the range to nothing).
-Checking `<base>..HEAD` catches earlier commits of a multi-commit phase that a HEAD-only look would miss.
-For deeper review, delegate to a throwaway read-only subagent that returns one-line PASS/FAIL — its
-reads stay in its context, not yours.
+
+- `<base>` is the LITERAL baseline hash from the lane ledger. A `$BASE` set in an earlier tool call
+  is gone and silently turns the range into nothing.
+- Check the whole `<base>..HEAD` range, not only HEAD, so earlier commits of a multi-commit phase
+  are covered. Every changed path must be one the phase intended.
+- The status filter hides only *untracked* planning files by exact name, so a planning file that
+  got staged or modified still shows. Adjust the names to the artifacts in use.
+- For deeper review, delegate to a throwaway read-only subagent that returns one-line PASS/FAIL.
 
 ---
 
-## Gotchas (all hard-won)
+## Gotchas
 
-- **Ghost autocomplete:** a greyed Tab-suggestion looks like input but isn't; edit keys won't clear
-  it. Type your prompt over it; never send Tab.
-- **Long-paste no-submit:** a trailing `\n` in `cmux send` is often swallowed into a bracketed paste.
-  Always follow with a separate `cmux send-key --surface "$W" enter`.
-- **`/clear` is total:** the worker remembers nothing afterward — that's why T2 is self-contained
-  (incl. the absolute plan path) and T1 is standing orders. `/clear` also reverts `/effort` to the
-  launch default — re-apply `medium` after every clear.
-- **Marker vs watcher:** the worker's `=== PHASE N DONE ===` line is for YOU to grep after idle; keep
-  it OUT of the busy-watcher regex or it fires instantly off the prompt echo.
-- **Branch label lies:** verify trunk by commit topology before branching.
+- **Ghost autocomplete:** a greyed Tab suggestion looks like input but is not; edit keys do not
+  clear it. Type over it; never send Tab.
+- **`/clear` is total:** the worker remembers nothing afterwards, which is why T2 is
+  self-contained and T1 is standing orders.

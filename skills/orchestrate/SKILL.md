@@ -28,6 +28,8 @@ Three non-negotiables:
 **Prerequisite:** a locked plan file exists (written and reviewed — not a vague idea).
 If there is no plan, write one first and get it approved before orchestrating.
 
+If `sh "${CLAUDE_PLUGIN_ROOT}/scripts/detect-backend.sh"` prints a backend (Orca, herdr, or cmux), offer `tgc-skills:orchestrate-plan` (visible worker agents) as the alternative, or `tgc-skills:orchestrate-list` for a list of independent fixes.
+
 ## Phase 0 — Inputs
 
 Resolve the **absolute path** to the plan file and the target repo directory(ies).
