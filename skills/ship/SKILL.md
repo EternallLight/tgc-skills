@@ -42,7 +42,8 @@ plus a report.**
 6. **Update the base if needed.** Fetch the PR base/default branch. If the committed
    feature branch is behind, merge the fetched base, resolve conflicts explicitly, and
    rerun the local gate. Do not rebase a published branch or force-push.
-7. **Push.** Push normally, establishing an upstream if needed. Never force-push.
+7. **Push.** `git push origin "HEAD:refs/heads/<branch>"`, adding `-u` when the branch has
+   no upstream, so the destination never depends on tracking config. Never force-push.
 8. **PR.** If none exists, `gh pr create --body-file <file>`. If the repo has a PR
    template (`pull_request_template.md` in `.github/`, `docs/`, or the root), fill in its
    sections. Otherwise use the template below. Either way write plain language with

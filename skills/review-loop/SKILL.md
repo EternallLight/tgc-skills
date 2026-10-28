@@ -27,9 +27,11 @@ once at the end. Never merge, never force-push.
    ```
    `EXITED` or the subagent's completion → step 4. `STALE` (no status line for 15
    minutes) → read the status tail and send the subagent one message to resume from that
-   line. Stale again → report the stall to the user with the status tail instead of
-   waiting. A stale status is a stall signal, not proof the subagent exited.
-4. Relay the final report, then `rm -rf "$LOOP_DIR"`.
+   line. Stale again → report the stall to the user with the status tail and the
+   `LOOP_DIR` path instead of waiting. A stale status is a stall signal, not proof the
+   subagent exited, so keep `LOOP_DIR` and never push or clean up on its behalf.
+4. Only after the subagent's completion arrives: relay the final report, then
+   `rm -rf "$LOOP_DIR"`.
 
 ## Subagent workflow
 
@@ -138,11 +140,13 @@ as they are.
 
 ### 3. Push once
 
-If `origin/<branch>` exists after `git fetch origin "<branch>"` and
-`git merge-base --is-ancestor "origin/<branch>" HEAD` fails, the remote diverged: exit
-`blocked` without retrying. Otherwise push normally, with `git push -u origin HEAD` when
-the branch has no upstream. `N=0` still pushes, so a clean but unpublished branch is
-published. Never force-push.
+Push to one explicit destination, `origin` and `refs/heads/<branch>`, whatever the
+branch's upstream says. Right before pushing, run `git fetch origin "<branch>"`; if
+`origin/<branch>` exists and `git merge-base --is-ancestor "origin/<branch>" HEAD`
+fails, the remote diverged: exit `blocked` without retrying. Otherwise run
+`git push origin "HEAD:refs/heads/<branch>"`, adding `-u` when the branch has no
+upstream. `N=0` still pushes, so a clean but unpublished branch is published. Never
+force-push.
 
 ### 4. Closing report
 

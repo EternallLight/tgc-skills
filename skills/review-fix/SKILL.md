@@ -117,7 +117,8 @@ tested. Never claim the merged tree was tested.
 
 ## Step 7: Push and report
 
-Push only after the gate passes. Never force-push. Report findings fixed, findings
+Push only after the gate passes, to the PR's head branch on `origin`:
+`git push origin "HEAD:refs/heads/<head branch>"`. Never force-push. Report findings fixed, findings
 skipped with reasons, drafted replies awaiting the user, exact commands run, the merge
 check sentence with the raw checks state, CI-only limitations, and the commit hash. Do
 not merge or trigger another review; the caller decides what follows.

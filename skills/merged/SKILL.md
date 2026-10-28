@@ -53,8 +53,10 @@ The human just merged a PR. Run the tail of the pipeline they otherwise type by 
      `orca worktree list --json` contains a `"path"` equal to the worktree path, run
      `orca worktree rm --worktree "path:<worktree-path>"`. If that command fails, stop
      and report the exact cleanup the user still needs to do; do not fall back to git.
-     Otherwise (no `orca`, the path is not listed, or the list call fails, which the
-     report mentions) run `git worktree remove <worktree-path>`.
+     If `orca` exists but the list call fails, ownership is unknown: skip the removal and
+     report it (for example, "open Orca and rerun, or remove it yourself"). Only with no
+     `orca`, or a successful list that does not contain the path, run
+     `git worktree remove <worktree-path>`.
    - Then delete the local branch if it still exists (Orca may already have deleted it).
      Try `git branch -d` first. After a squash/rebase merge, allow `git branch -D` only
      because the PR is verified merged and the local tip exactly matches its recorded

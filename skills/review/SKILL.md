@@ -134,7 +134,8 @@ post nothing.
    ```bash
    cd "$OUT" && export LC_ALL=C && cp changed.txt coverage.txt
    for f in cov.*; do sort -u "$f" | comm -12 - coverage.txt > coverage.tmp && mv coverage.tmp coverage.txt; done
-   comm -23 changed.txt coverage.txt | grep -vxF -f skipped.txt > missing.txt || true
+   comm -23 changed.txt coverage.txt > uncovered.txt
+   sort -u skipped.txt | comm -23 uncovered.txt - > missing.txt
    ```
 
 3. **Partial**: true when any reviewer failed or `missing.txt` is not empty.

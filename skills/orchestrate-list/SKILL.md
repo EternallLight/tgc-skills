@@ -55,7 +55,7 @@ Per lane:
 
 1. **herdr / cmux**: create the worktree and branch `fix/<slug>` from `origin/<default>` with the backend file's per-lane worktree step (`--no-track`, `push.default` check).
 2. Write the brief to `<SESSION_DIR>/<slug>-brief.md`: template **T1**, adapted as below. Its ground truth names the worktree path and branch (on Orca: the worktree the worker starts in).
-3. **herdr / cmux**: start the worker in that worktree with the backend file's worker launch, then send **T2** with one instruction: read `<SESSION_DIR>/<slug>-brief.md` and follow it. Keep the done marker text out of that prompt, or the watcher matches its echo. **Orca**: one `worker-start --spec` call per the backend file, with `--worktree new-top-level --name <slug> --base-branch origin/<default>` and the brief pasted into the **T3** spec. `--name` names both worktree and branch there, so record the branch the receipt reports.
+3. **herdr / cmux**: start the worker in that worktree with the backend file's worker launch, then send **T2** with one instruction: read `<SESSION_DIR>/<slug>-brief.md` and follow it. Keep the done marker text out of that prompt, or the watcher matches its echo. **Orca**: one `worker-start --spec` call per the backend file, with `--worktree new-top-level --name <slug> --base-branch origin/<default>` and a list-worker version of **T3** as the spec: drop T3's plan and `WORKER-BRIEF.md` reads and its phase lines, and paste the whole brief instead, including T1's Orca `worker_done` protocol, so the spec names no file the worktree lacks. `--name` names both worktree and branch there, so record the branch the receipt reports.
 4. Record in the ledger: slug, items, worktree path, branch, base hash, worker handle.
 
 ### Brief adaptations (T1)
