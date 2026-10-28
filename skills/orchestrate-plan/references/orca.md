@@ -78,7 +78,7 @@ When nothing has to be written into the worktree before the worker starts, one c
 worktree, the task, and the worker; run the tracking check above on the worktree it reports:
 
 ```bash
-orca orchestration worker-start --spec "<task spec>" --worktree new-top-level --name <change-slug> --base-branch origin/<default-branch> --agent claude --model sonnet --effort high --setup run --json
+orca orchestration worker-start --spec "<task spec>" --worktree new-top-level --name <change-slug> --repo path:'<repo>' --base-branch origin/<default-branch> --agent claude --model sonnet --effort high --setup run --json
 ```
 
 The call exits 0 only for `ready`. On a non-zero exit, do not relaunch: read `failedStage`,
@@ -114,10 +114,11 @@ read without the old cursor. Never supply or guess a provider session id or tran
 
 ## Wait for done or blocked — W3
 
-One blocking call covers every lane:
+One blocking call covers every lane. Keep `--timeout-ms` at 540000 or less so each call fits
+Claude Code's 10-minute foreground Bash limit (`timeout: 600000`):
 
 ```bash
-orca orchestration check --wait --types worker_done,escalation,question --timeout-ms 900000 --json
+orca orchestration check --wait --types worker_done,escalation,question --timeout-ms 540000 --json
 ```
 
 For each message in the returned Delivery:
@@ -131,7 +132,7 @@ For each message in the returned Delivery:
 Acknowledge only after every message in the Delivery is handled, and keep waiting in the same call:
 
 ```bash
-orca orchestration check --ack <delivery_id> --wait --types worker_done,escalation,question --timeout-ms 900000 --json
+orca orchestration check --ack <delivery_id> --wait --types worker_done,escalation,question --timeout-ms 540000 --json
 ```
 
 A timeout or `{count:0}` is a checkpoint, not a failure; phases run 15–60 minutes. After three
