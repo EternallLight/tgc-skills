@@ -76,7 +76,7 @@ cmux has no agent state; classify from the screen.
 Single lane: W1 below, with `run_in_background: true`. Parallel lanes: W2 in `templates.md` with:
 
 ```bash
-LANES="surface:21 surface:24"
+set -- surface:21 surface:24
 read_lane() { cmux read-screen --surface "$1" 2>/dev/null | tail -16; }
 ```
 
@@ -119,9 +119,8 @@ cmux send --surface "$W" -- '/clear\n'
 cmux read-screen --surface "$W" | tail -8
 ```
 
-If the slash palette is still open, `cmux send-key --surface "$W" enter`. `/clear` reverts
-Claude's effort to the launch default, which the `--effort high` launch flag already set; Codex
-keeps its launch flag. Then send the next T2 prompt.
+If the slash palette is still open, `cmux send-key --surface "$W" enter`. Then send the next T2
+prompt.
 
 ## Close
 

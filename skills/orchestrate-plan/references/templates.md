@@ -126,23 +126,23 @@ start the next phase.
 
 ## W2 — multi-lane screen monitor (cmux, or herdr without agent state)
 
-Define `LANES` and `read_lane` from the backend file, set `done_re` to the marker your brief
+Set the lane list with the backend file's `set --` line, define its `read_lane`, set `done_re` to the marker your brief
 prints, and run with `run_in_background: true`. Background Bash reports only when the task exits,
 so the monitor **exits as soon as any lane needs attention**, printing every lane's status.
 Service every non-BUSY lane, then re-arm a fresh monitor.
 
 ```bash
-done_re='^=== PHASE [0-9]+ DONE ==='
+done_re='^[^[:alnum:]=]*=== PHASE [0-9]+ DONE ===[[:space:]]*$'
 busy_re='[0-9]+s ·|esc to interrupt|thinking'
 input_re='Do you want|❯ ?1[.)]|\b1[.)] (Yes|No)|\(y/n\)|\[y/N\]|Enter to (select|confirm)'
 for i in $(seq 1 160); do
   attn=0; out=""
-  for W in $LANES; do
+  for W in "$@"; do
     s=$(read_lane "$W")
     busy=0; printf '%s' "$s" | grep -qE "$busy_re" && busy=1
     if   [ $busy -eq 0 ] && printf '%s' "$s" | grep -qE "$input_re"; then st=NEEDS_INPUT
     elif [ $busy -eq 0 ] && printf '%s' "$s" | grep -qE "$done_re"; then st=DONE
-    elif [ $busy -eq 0 ] && printf '%s' "$s" | grep -qE '^BLOCKED:'; then st=BLOCKED
+    elif [ $busy -eq 0 ] && printf '%s' "$s" | grep -qE '^[^[:alnum:]]*BLOCKED:'; then st=BLOCKED
     elif [ $busy -eq 1 ]; then st=BUSY
     else st=STALL; fi
     out="$out
@@ -197,8 +197,4 @@ grep -nE '<a key symbol this phase should add>' '<worktree>/<changed file>'
 - **Ghost autocomplete:** a greyed Tab suggestion looks like input but is not; edit keys do not
   clear it. Type over it; never send Tab.
 - **`/clear` is total:** the worker remembers nothing afterwards, which is why T2 is
-  self-contained and T1 is standing orders. It also reverts Claude's `/effort` to the launch
-  default, so set effort with the launch flag.
-- **Marker vs watcher:** the done marker is for you to grep after idle. Keep it out of any busy
-  regex, or the watcher fires on the prompt echo.
-- **Branch labels lie:** verify the trunk by commit topology before branching.
+  self-contained and T1 is standing orders.

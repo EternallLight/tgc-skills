@@ -47,7 +47,10 @@ The human just merged a PR. Run the tail of the pipeline they otherwise type by 
    - Unless `keep` was given, remove the PR's linked worktree without asking: a clean
      tree at the verified head is all the permission needed. If this session's working
      directory is inside that worktree, run every other step first (release included)
-     and do the removal, branch deletion, and prune last.
+     and do the removal, branch deletion, and prune last. Run the removal and every git
+     command after it from the primary worktree (`git -C '<primary-worktree>' …`, or
+     `cd '<primary-worktree>' &&` in the same Bash call), because git cannot run from a
+     deleted directory.
    - Pick the removal command by whether Orca manages the worktree, not by which
      terminal is running. If `command -v orca` succeeds and
      `orca worktree list --json` contains a `"path"` equal to the worktree path, run

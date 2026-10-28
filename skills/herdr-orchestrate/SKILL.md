@@ -22,7 +22,7 @@ sh "${CLAUDE_PLUGIN_ROOT}/scripts/detect-backend.sh"
 - `orca` → stop and use Orca's own `orca-cli` / `orchestration` skills (`orca skills get orca-cli`).
 - `none` → tell the user you are not inside a herdr pane, and stop.
 
-Trust the script, not a working CLI. `herdr` talks to the server socket from *any* shell, so a successful `herdr pane list` proves the server is up, not that you are in a pane. Never gate on `HERDR_SESSION` (empty for the default session). Outside a pane, an omitted target resolves to the UI-focused pane — quite possibly the human's own.
+Trust the script, not a working CLI. `herdr` talks to the server socket from *any* shell, so a successful `herdr pane list` proves the server is up, not that you are in a pane. Never gate on `HERDR_SESSION` (empty for the default session). Outside a pane, an omitted target resolves to the UI-focused pane — quite possibly the human's own. Always pass `--current` or an explicit ID.
 
 ## Golden rules
 
@@ -92,7 +92,7 @@ herdr agent read worker-api --source visible --lines 16 | python3 -c 'import sys
 ```bash
 herdr agent wait worker-api --timeout 900000
 herdr agent wait worker-api --until blocked --timeout 900000
-herdr pane wait-output w1:p2 --regex '(?m)^=== PHASE [0-9]+ DONE ===' --source recent --timeout 900000
+herdr pane wait-output w1:p2 --regex '(?m)^[^[:alnum:]=]*=== PHASE [0-9]+ DONE ===[[:space:]]*$' --source recent --timeout 900000
 herdr pane wait-output w1:p2 --match 'test result' --source recent --timeout 120000
 ```
 Timeouts are **milliseconds**; omitting `--timeout` waits forever. Without `--until`, `agent wait` and `agent prompt --wait` return at the first settled state (`idle`, `done`, or `blocked`); `--until STATUS` is repeatable. `wait-output` takes `--match TEXT` (substring) or `--regex PATTERN` and returns `.result.matched_line`. On success these exit `0`; on timeout they exit non-zero with a JSON error. So `if herdr agent wait … ; then` is a valid control structure — but always confirm with a read before acting.
@@ -143,7 +143,7 @@ The human is the CEO and talks only to **you, the Manager**, in the focused pane
 5. **Inspect, don't assume.** Before reporting or acting, read the worker's actual screen. Never invent output you didn't read.
 6. **Report up.** Summarize worker state to the human. If a worker is blocked on a question, read it, decide (or ask the human), and answer it.
 
-A copy-paste Manager prompt and the deeper command catalog are in `references/herdr-cli.md`.
+The deeper command catalog is in `references/herdr-cli.md`.
 
 ## Answering agents in workers
 
@@ -170,19 +170,13 @@ Keep the upfront planning human-led; only the periodic mechanical check-ins run 
 
 ## Gotchas
 
-- **`pane wait-output` searches what is already on screen**, including your own typed command and any prompt that quotes the marker. Match text that only real output contains, anchor the regex (`--regex '(?m)^=== PHASE [0-9]+ DONE ==='`), and confirm with a read.
-- **An omitted pane target can mean the UI-focused pane.** Pass `--current` or an explicit ID, every time.
-- **`agent start` needs an idle shell pane.** It never splits; split (or create a tab/workspace/worktree) first.
+- **`pane wait-output` searches what is already on screen**, including your own typed command and any prompt that quotes the marker. Match text that only real output contains, match the marker as a whole line, allowing only the agent's bullet or indent before it (`--regex '(?m)^[^[:alnum:]=]*=== PHASE [0-9]+ DONE ===[[:space:]]*$'`), and confirm with a read.
 - **`agent_prompt_stalled` means the prompt changed nothing within five seconds.** Read the screen before re-sending; the agent may be on a dialog.
-- **`done`, not `idle`, is what an unfocused worker reports after finishing.** Wait on the settled default or list both.
-- **`pane split` is `right|down` only** — no `left`/`up` (use `pane swap` to reorder).
-- **Timeouts are milliseconds.** `--timeout 900` is 0.9 seconds, not 15 minutes.
-- **A pane ID dies with its pane, and a name dies with its agent.** Re-check `herdr agent list` after a worker exits or is restarted.
 - **A bigger `--lines` cannot recover an alternate-screen transcript.** If a long reply is cut off, ask the worker to write it to a temporary Markdown file and reply with the path, then read the file.
 - **`herdr integration install claude`** wires Claude Code's hooks into herdr so `working`/`idle`/`blocked` are reported accurately. Without it `agent_status` leans on screen heuristics — check `herdr integration status` if statuses look wrong.
 - **Don't close what you didn't create**, and never run `herdr server stop` from an active session: it kills every pane's process.
 
 ## When you need more
 
-- Full command catalog, JSON shapes, and the Manager prompt: `references/herdr-cli.md`
+- Full command catalog and JSON shapes: `references/herdr-cli.md`
 - Authoritative, always-current: `herdr --help`, `herdr <group>`, `herdr --skill` (the vendor's agent guide for the installed version), `herdr api schema --json` (the complete request/response JSON Schema), `herdr api snapshot` (live state).

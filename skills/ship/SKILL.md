@@ -90,8 +90,8 @@ plus a report.**
      a queue, a retry time) is a "no verdict" answer: quote it and stop. No verdict after
      the second wait → report "no verdict from <login> yet at <sha>" and stop.
    - `CHANGES_REQUESTED` → follow `${CLAUDE_PLUGIN_ROOT}/skills/review-fix/SKILL.md` on the
-     PR (explicit-only, so read it instead of invoking it; it applies its nit rule and
-     pushes), then record the new HEAD and a new `SINCE`, re-request once, and wait as above. At most
+     PR (explicit-only, so read it instead of invoking it, and replace each `CLAUDE_PLUGIN_ROOT` placeholder in it, and in every plugin file it points to, with `${CLAUDE_PLUGIN_ROOT}`; it applies
+     its nit rule and pushes), then record the new HEAD and a new `SINCE`, re-request once, and wait as above. At most
      2 fix rounds; then report `blocked` with the open findings.
    - `COMMENTED` → first read that review's body
      (`gh api "repos/{owner}/{repo}/pulls/<n>/reviews/<id>" --jq .body`) and its inline

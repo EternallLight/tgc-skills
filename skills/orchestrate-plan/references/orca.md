@@ -64,7 +64,9 @@ git -C '<worktree>' branch --show-current
 git -C '<worktree>' rev-parse --abbrev-ref '@{upstream}'
 ```
 
-The first must print the slug. If the second prints anything, run
+The first prints the lane branch: the slug, or `<prefix>/<slug>` when Orca adds the user's branch
+prefix. Record exactly what it prints and use that name, never the bare slug, in every later
+refspec and `ls-remote`. If the second prints anything, run
 `git -C '<worktree>' branch --unset-upstream`.
 
 ## Start a worker
@@ -210,8 +212,5 @@ terminals by handle, never by title.
 - **`dispatch --inject` leaves the process unsupervised.** `worker-show` and `worker-read` report
   it as `unsupervised`, and stop, retain, and release take no process action. Use
   `worker-start --terminal <handle>` when you need lifecycle ownership of a terminal you launched.
-- **A worktree per lane needs a reason on Orca.** Dev servers, watchers, and local stacks run from
-  the user's primary checkout; that live-process conflict is the reason. State it.
 - **Supervision, not handoff.** If the user only wants work handed off without monitoring, that is
   Orca's `orca-cli` skill, not this one.
-- `coordinator-start` and `coordinator-stop` are retired. Use `run-create` or `run-use`.

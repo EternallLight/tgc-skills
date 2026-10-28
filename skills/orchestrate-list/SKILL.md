@@ -33,8 +33,8 @@ Build one numbered table: **# | title | what is wrong | evidence** (`file:line`,
 
 - One lane per item by default.
 - Items that touch the same files or the same function share **one lane**: one worker fixes them in sequence, so branches never collide. Decide from the evidence; when unsure, run a narrow `grep -n`, never read source.
-- Name each lane with one kebab-case slug that says what it fixes. Its branch is `fix/<slug>` on herdr/cmux and `<slug>` on Orca (Orca names the branch after `--name`). Never `lane-1`, `worker-2`, or an item number.
-- `git ls-remote origin "refs/heads/<branch>"` must print nothing for each lane's branch before it starts; otherwise pick another slug.
+- Name each lane with one kebab-case slug that says what it fixes. Its branch is `fix/<slug>` on herdr/cmux. On Orca it is whatever `git branch --show-current` prints in the new worktree: the slug, possibly with Orca's `<user>/` prefix. Never `lane-1`, `worker-2`, or an item number.
+- `git ls-remote origin "refs/heads/<branch>"` must print nothing for each lane's branch before it starts (on Orca, check the branch the receipt reports right after the start); otherwise pick another slug.
 - **More than 6 lanes → ask before starting.**
 
 Show the lane table (lane | slug | items | fence = files it may touch), then start.
@@ -71,7 +71,7 @@ Per lane:
 
 ## Phase 4 — Watch & unblock
 
-Run the backend file's monitor loop: Orca **W3** (`check --wait`), herdr **W0** (W2 as fallback), cmux **W1** for one lane or **W2** for several. On herdr and cmux, swap the watchers' marker pattern for `^DONE [a-z0-9-]+$` (`(?m)^DONE [a-z0-9-]+$` in herdr's `wait-output`). Every wake is a prompt to read the lane yourself, not a verdict.
+Run the backend file's monitor loop: Orca **W3** (`check --wait`), herdr **W0**'s `agent wait` form, because Phase 3 already sent the prompt (W2 as fallback), cmux **W1** for one lane or **W2** for several. On herdr and cmux, swap the watchers' marker pattern for `^[^[:alnum:]]*DONE [a-z0-9-]+[[:space:]]*$` (prefix `(?m)` in herdr's `wait-output`). Every wake is a prompt to read the lane yourself, not a verdict.
 
 - **Permission prompt inside the fence** (read the brief or repo files, edit a fenced file, run the repo's checks) → answer yes.
 - **Push, merge, PR, out-of-fence edit, or destructive command** → answer no, then tell the worker in one line to stay inside the brief.
@@ -102,7 +102,7 @@ One table per item: **# | title | lane | status | evidence**.
 
 ## Ship (only with `ship`)
 
-The unit is the **lane**, not the item: one branch, one PR per lane. A lane holding several items ships one PR whose body lists each item it fixes. A lane ships only when **every** item in it is `fixed`; otherwise report it and leave it unshipped. Ship each such lane through a subagent told to read and follow `${CLAUDE_PLUGIN_ROOT}/skills/ship/SKILL.md` (explicit-only, so it cannot be invoked as a skill) in that lane's worktree, **at most 2 at a time**; relay each PR URL and review outcome in the final report. Workers never run ship.
+The unit is the **lane**, not the item: one branch, one PR per lane. A lane holding several items ships one PR whose body lists each item it fixes. A lane ships only when **every** item in it is `fixed`; otherwise report it and leave it unshipped. Ship each such lane through a subagent told to read and follow `${CLAUDE_PLUGIN_ROOT}/skills/ship/SKILL.md` in that lane's worktree, and to replace each `CLAUDE_PLUGIN_ROOT` placeholder in it, and in every plugin file it points to, with `${CLAUDE_PLUGIN_ROOT}` (ship is explicit-only, so it cannot be invoked as a skill, and a read file keeps its placeholders). Run **at most 2 at a time**, and relay each PR URL and review outcome in the final report. Workers never run ship.
 
 Without `ship`, leave the branches and worktrees for the user; `tgc-skills:merged` cleans each one after its PR merges.
 
@@ -110,8 +110,4 @@ Remove `<SESSION_DIR>` as the last step, whether the run finished, failed, or wa
 
 ## Hard rules
 
-- You orchestrate; you do not fix. One worker per lane, one worktree per lane.
-- Workers never push, merge, or ship. Pushing happens only inside `tgc-skills:ship`.
-- Overlapping items share a lane; independent items never do.
-- Never report a lane `fixed` without the plumbing checks above and your own run of its check.
 - Never force-push; never touch the default branch.

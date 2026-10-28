@@ -127,7 +127,8 @@ For parallel lanes, prepare every lane before Phase 3 so all workers are armed.
 
 1. **Confirm idle** with the backend's read.
 2. **Fresh context** for every phase after the first: the backend's Next phase section.
-3. **Hand over the phase**: T2 through the backend's send on herdr and cmux; on Orca, the
+3. **Hand over the phase**: T2 through the backend's send on cmux, and through W0 on herdr,
+   which sends and waits in one call; on Orca, the
    backend's start puts a fresh worker on the phase's T3 task. The prompt carries the absolute plan path and ONE phase's scope
    and stop point, tells the worker to build the simplest thing that satisfies the plan, run a
    simplification pass before finishing, print the done marker (Orca: `worker_done`), and STOP.
@@ -166,46 +167,44 @@ Loop until every lane is complete or a hard escalation. Report progress in a few
 ## Phase 5 — Ship the lanes
 
 When every lane is verified, ask the user once: "all <N> lanes verified, ship them?". On yes, ship
-each lane yourself: one fresh `general-purpose` subagent per lane reads and follows
-`${CLAUDE_PLUGIN_ROOT}/skills/ship/SKILL.md` (explicit-only, so it cannot be invoked as a
-skill) from that lane's worktree, so its output stays out of your context. **At most 2 ships at a time**; queue the
+each lane yourself. First delete the lane's untracked brief (`rm '<worktree>/WORKER-BRIEF.md'`)
+and require `git -C '<worktree>' status --porcelain` to print nothing, because ship refuses a
+dirty tree. Then one fresh `general-purpose` subagent per lane reads and follows
+`${CLAUDE_PLUGIN_ROOT}/skills/ship/SKILL.md` from that lane's worktree. Ship is explicit-only, so
+it cannot be invoked as a skill, and a read file keeps its placeholders: tell the subagent to
+replace each `CLAUDE_PLUGIN_ROOT` placeholder in it, and in every plugin file it points to, with `${CLAUDE_PLUGIN_ROOT}`. Its output stays out of your context. **At most 2 ships at a time**; queue the
 rest. Relay every PR URL and review outcome in one final report. Workers never run ship: a ship
 started in a worker races the orchestrator's push.
 
 ## Keep your context clean
 
 - Read screens with `| tail -N` (8–40 lines), never full scrollback.
-- Verify with `git log --oneline`, `git show --stat`, and targeted `grep -n`; never Read whole
-  source files.
 - Trust the worker's own gates (full pre-push gate, simplification pass, self-report); spot-check,
   don't re-run everything.
-- For heavy verification, spawn a throwaway read-only subagent that returns one-line PASS/FAIL.
 
 ## Hard rules
 
 - You orchestrate; you do not implement. Never hand-edit a lane's worktree.
 - **One phase per prompt; the worker never advances itself.** Never bundle "phase N then N+1";
   only you advance a lane, after V1.
-- **Simplicity is a per-phase gate**: the simplest thing that satisfies the plan, then a
-  simplification pass before the done marker.
 - On herdr and cmux the worker ends every phase with exactly `=== PHASE <N> DONE ===`. Keep that
-  text out of any busy regex, and anchor any marker regex to the start of a line, because the
-  echoed prompt quotes it.
+  text out of any busy regex. Match it as a whole line, allowing only the agent's bullet or indent
+  before it (`^[^[:alnum:]=]*=== PHASE [0-9]+ DONE ===[[:space:]]*$`), because the echoed prompt quotes it
+  mid-line.
 - **Workers NEVER push.** The brief tells them to print `BLOCKED: push requested` instead. Pushing
   happens after the Phase 5 gate, through `tgc-skills:ship`. Any push you make yourself uses an
-  explicit refspec, `git push origin HEAD:refs/heads/<change-slug>`, never a bare `git push` whose
+  explicit refspec, `git push origin HEAD:refs/heads/<lane branch>`, never a bare `git push` whose
   destination depends on tracking and `push.default`.
 - If anything reaches a protected or default branch anyway: restore it with a pushed `git revert`
   (never force-push shared history), rebuild the feature branch on top of the revert, and tell the
   user immediately.
-- Parallel only for genuinely independent repo lanes; at most one `in_progress` phase per lane.
-- GATE before anything irreversible or outward-facing. Don't trust branch labels. Don't fake
+- GATE before anything irreversible or outward-facing. Don't fake
   convergence; report real failures. Planning files (the plan, the brief, review logs) stay
   untracked.
-- Branches and worktrees carry the change slug, never run machinery.
 
 ## Fallback
 
-On `none`, use `tgc-skills:orchestrate`: each phase becomes one fresh in-session subagent (a new
-subagent is a pristine context), and independent lanes run as parallel subagents. You lose live
-visibility and mid-phase intervention, so prefer a real backend when one is available.
+On `none`, tell the user and stop. Suggest `/tgc-skills:orchestrate` instead: each phase becomes
+one fresh in-session subagent (a new subagent is a pristine context), and independent lanes run as
+parallel subagents. It loses live visibility and mid-phase intervention, so prefer a real backend
+when one is available.

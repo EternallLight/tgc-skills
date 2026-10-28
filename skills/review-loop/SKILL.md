@@ -90,7 +90,7 @@ Record `verdict`, `findings`, `target_sha`, `target_tree`, `mode`, `coverage`, a
 
 **Fix round r**: read `${CLAUDE_PLUGIN_ROOT}/skills/review-fix/SKILL.md` and follow it in
 loop-driven mode with the latest `findings.json`. It is user-invocation-only, so the
-Skill tool cannot load it. It fixes, runs lint, typecheck, and the tests covering each
+Skill tool cannot load it, and a read file keeps its placeholders: replace each `CLAUDE_PLUGIN_ROOT` placeholder in it, and in every plugin file it points to, with `${CLAUDE_PLUGIN_ROOT}`. It fixes, runs lint, typecheck, and the tests covering each
 changed contract, and commits locally without pushing. Then go to the next review.
 
 - **Fix the class**: when a finding belongs to a defect family an earlier round already
@@ -141,11 +141,13 @@ as they are.
 ### 3. Push once
 
 Push to one explicit destination, `origin` and `refs/heads/<branch>`, whatever the
-branch's upstream says. Right before pushing, run `git fetch origin "<branch>"`; if
-`origin/<branch>` exists and `git merge-base --is-ancestor "origin/<branch>" HEAD`
-fails, the remote diverged: exit `blocked` without retrying. Otherwise run
-`git push origin "HEAD:refs/heads/<branch>"`, adding `-u` when the branch has no
-upstream. `N=0` still pushes, so a clean but unpublished branch is published. Never
+branch's upstream says. Right before pushing, run
+`git ls-remote --heads origin "refs/heads/<branch>"`. If it fails (network or auth), exit
+`blocked`. If it prints nothing, the branch is unpublished. Otherwise its first field is
+the remote tip: run `git fetch origin "<branch>"`, and if
+`git merge-base --is-ancestor <remote tip> HEAD` fails, the remote diverged: exit
+`blocked` without retrying. Then run `git push origin "HEAD:refs/heads/<branch>"`, adding
+`-u` when the branch has no upstream. `N=0` still pushes, so a clean but unpublished branch is published. Never
 force-push.
 
 ### 4. Closing report

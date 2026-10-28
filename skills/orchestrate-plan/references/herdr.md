@@ -73,7 +73,8 @@ is on the alternate screen; ask it to write its full reply to a temp file and pr
 
 ## Wait for done or blocked — W0
 
-Send and wait in one call, with `run_in_background: true`. Timeouts are milliseconds.
+Send and wait in one call, with `run_in_background: true`. Timeouts are milliseconds. This call is
+the phase's send: never also send the same prompt another way, or the worker runs it twice.
 
 ```bash
 herdr agent prompt worker-<lane> '<phase prompt>' --wait --timeout 3600000
@@ -95,18 +96,19 @@ A return tells you something settled, not what happened. Read the tail and class
 or an idle worker ending on a question is NEEDS-INPUT, not DONE.
 
 **Marker fallback** when state reads `unknown`. Use `(?m)` because herdr matches Rust regexes and
-`^` otherwise anchors only to the start of the snapshot; the anchor keeps the echoed prompt, which
-quotes the marker mid-line, from matching:
+`^` otherwise anchors only to the start of the snapshot. The pattern allows the agent's bullet or
+indent before the marker and nothing after it, so the echoed prompt, which quotes the marker
+mid-line, does not match:
 
 ```bash
-herdr pane wait-output <pane_id> --regex '(?m)^=== PHASE [0-9]+ DONE ===' --source recent --timeout 3600000
+herdr pane wait-output <pane_id> --regex '(?m)^[^[:alnum:]=]*=== PHASE [0-9]+ DONE ===[[:space:]]*$' --source recent --timeout 3600000
 ```
 
 For a screen-scrape monitor across lanes, use W2 in `templates.md` with this `read_lane`. `pane read`
 prints a JSON envelope, so it unwraps `.result.read.text` (needs `python3`):
 
 ```bash
-LANES="w1:p2 w1:p3"
+set -- w1:p2 w1:p3
 read_lane() { herdr pane read "$1" --source visible --lines 16 2>/dev/null | python3 -c 'import json, sys; d = sys.stdin.read(); print(json.loads(d)["result"]["read"]["text"] if d.lstrip().startswith("{") else d)'; }
 ```
 
@@ -129,9 +131,8 @@ herdr agent prompt worker-<lane> '/clear'
 herdr agent read worker-<lane> --source visible --lines 8
 ```
 
-If the slash palette is still open, `herdr agent send-keys worker-<lane> enter`. `/clear` reverts
-Claude's effort to the launch default, which the `--effort high` launch flag already set; Codex
-keeps its launch flag. Then send the next T2 prompt.
+If the slash palette is still open, `herdr agent send-keys worker-<lane> enter`. Then send the next
+T2 prompt.
 
 ## Close
 

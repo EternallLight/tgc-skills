@@ -17,8 +17,6 @@ Captured from `herdr --help`, the per-group command lists (`herdr <group>` with 
 - [Worktrees](#worktrees)
 - [Notifications](#notifications)
 - [Sessions, server, integrations](#sessions-server-integrations)
-- [Gotchas](#gotchas)
-- [Manager prompt (copy-paste)](#manager-prompt)
 
 ## Architecture & targeting model
 
@@ -205,7 +203,7 @@ herdr pane wait-output <pane_id> (--match TEXT | --regex PATTERN)
 
 Usable directly as control flow:
 ```bash
-if herdr pane wait-output w1:p2 --regex '(?m)^=== PHASE [0-9]+ DONE ===' --source recent --timeout 900000 >/dev/null; then
+if herdr pane wait-output w1:p2 --regex '(?m)^[^[:alnum:]=]*=== PHASE [0-9]+ DONE ===[[:space:]]*$' --source recent --timeout 900000 >/dev/null; then
   echo "phase marker seen"
 else
   echo "timed out — sweep the pane manually"
@@ -305,28 +303,3 @@ herdr terminal title set <title> | herdr terminal title clear
 **`herdr integration install claude` matters for orchestration.** It installs Claude Code hooks that report real agent state to herdr, which is what makes `agent_status` and `agent wait` trustworthy. Without it herdr falls back to screen-detection heuristics. If waits misfire, check `herdr integration status` first, then `herdr agent explain <target>`.
 
 Config lives at `~/.config/herdr/config.toml`; logs at `~/.config/herdr/herdr.log` (plus `herdr-client.log`, `herdr-server.log`).
-
-## Gotchas
-
-- **The CLI answers from outside herdr.** A working `herdr` command proves the server is up, not that you are in a pane. Gate on `$HERDR_PANE_ID`.
-- **An omitted pane target can mean the UI-focused pane** — someone else's, quite possibly the human's. Pass `--current` or an explicit ID.
-- **`agent start` needs an idle shell pane** and never splits. Create the pane first.
-- **`done` vs `idle`:** an unfocused worker that finished reports `done`. Wait on the settled default rather than `--until idle`.
-- **`wait-output` matches what is already on screen**, including the echoed command. Anchor your regex.
-- **Timeouts are milliseconds.** `--timeout 900` = 0.9 s.
-- **Splits are `right|down` only.**
-- **`HERDR_SESSION` is empty for the default session** — a falsy check on it is not a herdr check.
-- **Names and IDs are not eternal.** A name clears when its agent exits or is replaced; a moved pane gets a new ID; a closed pane's ID is never reused.
-- **`<cmd> --help` prints the top-level help.** Use `herdr <group>` for the command list.
-
-## Manager prompt
-
-A copy-paste Manager prompt (adapt ids/roles to the current workspace):
-
-> You are the Manager agent running in my focused herdr pane. I will only talk to you; you coordinate worker panes. Use the REAL herdr CLI (do not invent flags; `herdr <group>` prints each group's commands). Keep upfront planning human-led — confirm the plan with me before delegating.
-> 1. Confirm you are in herdr: `[ -n "$HERDR_PANE_ID" ]`. The CLI works from anywhere, so this gate is what distinguishes you from a stray shell.
-> 2. Inspect live state: `herdr api snapshot`.
-> 3. Spawn each worker by name: `herdr pane split --current --direction down --cwd <repo> --no-focus`, then `herdr agent start worker-<role> --kind claude --pane <pane_id> -- --model sonnet --effort high`. Address workers by NAME from then on.
-> 4. Delegate: `herdr agent prompt worker-<role> '<task>'` (always single quotes — double quotes let the shell expand `$()`/`$VAR` in MY pane).
-> 5. Wait instead of polling: `herdr agent wait worker-<role> --timeout <ms>`, then read the screen with `herdr agent read worker-<role> --source recent-unwrapped --lines 40`.
-> 6. You talk to me; workers do the work. Report status; never invent output you did not read.

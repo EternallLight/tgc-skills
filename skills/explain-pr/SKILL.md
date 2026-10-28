@@ -47,9 +47,6 @@ unjustified, and the user has decided what to do about the unjustified ones.
 
 ## Boundaries
 
-- **Not a review.** Bugs, style, and simplification belong to `tgc-skills:polish` and
-  `tgc-skills:review`. This skill asks only "can we say why this is here".
-- **Not a PR description.** `tgc-skills:ship` writes that.
-- **Chat only.** No files, no HTML, no artifacts, no publishing. The answer is the
-  message.
-- Read-only: never edits code, never commits, never pushes, never comments on GitHub.
+Read-only: never edits code, commits, pushes, or comments on GitHub. Bugs and style
+belong to `tgc-skills:polish` and `tgc-skills:review`; the PR body belongs to
+`tgc-skills:ship`.
