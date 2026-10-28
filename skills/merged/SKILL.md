@@ -2,7 +2,7 @@
 name: merged
 description: Use right after the user merged a PR — "merged", "I merged it", "merged, clean up", "shipped, clean up the branch" — to run the post-merge routine for the repo the PR belongs to.
 disable-model-invocation: true
-argument-hint: "[PR URL|number] [release]"
+argument-hint: "[PR URL|number] [release] [keep]"
 ---
 
 # Merged — post-merge cleanup, checks, and (optional) release
@@ -15,6 +15,8 @@ The human just merged a PR. Run the tail of the pipeline they otherwise type by 
   branch's PR).
 - `release` — also cut a release after cleanup. **Never release unless this word (or an
   explicit ask) is present** — in some repos publishing a release deploys to production.
+- `keep` — keep the PR's worktree and local branch. Without this word (or an explicit
+  "keep the worktree"), removing them is the default.
 
 ## Steps
 
@@ -42,17 +44,30 @@ The human just merged a PR. Run the tail of the pipeline they otherwise type by 
      remove the primary worktree. If the PR branch occupies the primary worktree while
      the default branch is checked out elsewhere, leave the branch/worktree and report
      why cleanup was skipped.
-   - Remove only a clean linked worktree belonging to this PR. Try `git branch -d` first.
-     After a squash/rebase merge, allow `git branch -D` only because the PR is verified
-     merged and the local tip exactly matches its recorded head. Never remove unrelated
-     branches or worktrees.
+   - Unless `keep` was given, remove the PR's linked worktree without asking: a clean
+     tree at the verified head is all the permission needed. If this session's working
+     directory is inside that worktree, run every other step first (release included)
+     and do the removal, branch deletion, and prune last.
+   - Pick the removal command by whether Orca manages the worktree, not by which
+     terminal is running. If `command -v orca` succeeds and
+     `orca worktree list --json` contains a `"path"` equal to the worktree path, run
+     `orca worktree rm --worktree "path:<worktree-path>"`. If that command fails, stop
+     and report the exact cleanup the user still needs to do; do not fall back to git.
+     Otherwise (no `orca`, the path is not listed, or the list call fails, which the
+     report mentions) run `git worktree remove <worktree-path>`.
+   - Then delete the local branch if it still exists (Orca may already have deleted it).
+     Try `git branch -d` first. After a squash/rebase merge, allow `git branch -D` only
+     because the PR is verified merged and the local tip exactly matches its recorded
+     head. Never remove unrelated branches or worktrees.
    - Run `git worktree prune` to clear stale administrative records. Do not delete
      untracked files or vaguely named "planning artifacts"; each workflow owns and
      removes its own temporary files.
-5. **Release (only if requested).** Use the repo's own documented release flow.
+5. **Release (only if requested).** Prefer a repo-local release skill or command (for
+   example `.claude/skills/release/` or `.claude/commands/release.md`); otherwise use the
+   repo's documented release process.
 6. **Report.** One compact block: merged PR, migration verdict (none / ran /
-   NOT VERIFIED — flag loudly), what auto-deploys, branches/worktrees removed,
-   release link if cut.
+   NOT VERIFIED — flag loudly), what auto-deploys, branches/worktrees removed (and
+   whether through Orca or git) or kept, release link if cut.
 
 ## Red flags
 

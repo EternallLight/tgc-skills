@@ -1,7 +1,7 @@
 ---
 name: polish
-description: Use only when the user explicitly asks for a combined quality pass over changed code, or when the active ship workflow invokes it — "polish the diff", "polish my changes", "clean up my changes", "run all the reviewers". Diff-scoped by default; accepts an optional path argument.
-argument-hint: "[path]"
+description: Use only when the user explicitly asks for a combined quality pass over changed code, or when the active ship workflow invokes it — "polish the diff", "polish my changes", "clean up my changes", "run all the reviewers". Diff-scoped by default; accepts an optional path or commit range and a subset of lenses.
+argument-hint: "[path|commit-range] [lenses=correctness,simplify,overeng]"
 ---
 
 # Polish
@@ -29,17 +29,26 @@ sequentially. Fan-out read, fan-in write.
   `git diff --cached --name-only`, and untracked files from
   `git ls-files --others --exclude-standard`. If all are empty, fall back to
   `git diff --name-only HEAD~1` and say you did.
-- **Path argument:** review that file/directory.
+- **Path argument** (`src/components`): review that file/directory.
+- **Range argument** (`abc123..HEAD`): review the files from
+  `git diff --name-only <range>` and the changes in that range. Use it for work that is
+  already committed, such as commits a review loop made.
+- **`lenses=`** (`lenses=simplify,overeng`): run only the named lenses —
+  `correctness`, `simplify`, `overeng`. The rest of the flow is unchanged. An unknown
+  name → stop and list the valid ones.
 - Skip files a review can't help: lockfiles, generated code, snapshots, binaries,
   vendored dirs.
 
 If there is nothing to review, say so and stop.
 
-## Step 2 — Fan out three lenses (parallel, findings-only)
+## Step 2 — Fan out the lenses (parallel, findings-only)
 
-Dispatch **three `general-purpose` subagents in a single message** so they run
-concurrently. Give each the file list and require it to return **only** a JSON array
-against this schema:
+Dispatch **one `general-purpose` subagent per lens in a single message** so they run
+concurrently. Run the correctness lens on the session model and the simplification and
+over-engineering lenses with `model: sonnet`. Give each the file list, the scope, and its
+own output path from `mktemp "${TMPDIR:-/tmp}/polish-<lens>.XXXXXX"`. Each lens writes
+**only** a JSON array against this schema to that path and replies with the path alone,
+because long replies arrive truncated:
 
 ```json
 [{
@@ -59,28 +68,41 @@ The three lens prompts:
    errors, off-by-one, null/undefined handling, wrong conditionals, race conditions,
    incorrect error handling, broken edge cases. Do NOT report style or simplification.
    Set `behaviorChanging: true` for any fix that alters runtime behavior (most bug
-   fixes do). Return findings-only JSON — do not edit files."
+   fixes do). Write the findings JSON to your output path — do not edit source files."
 
 2. **simplification** — "Review these changed files for clarity and simplification:
    duplicated logic that could reuse existing helpers, dead flexibility, awkward
    control flow, wrong altitude, needless intermediate variables. Preserve behavior
    exactly — every fix must be `behaviorChanging: false`. Follow the repo's existing
-   idioms and CLAUDE.md conventions. Return findings-only JSON — do not edit files."
+   idioms and CLAUDE.md conventions.
+
+   Comments are part of this lens. The repo's `CLAUDE.md`/`AGENTS.md` comment rules
+   win. Where the repo states none, report every comment that restates what the code
+   does, narrates the change ('now we handle X'), refers to a plan, phase, or review
+   round, or annotates a config, schema, constant, or enum entry. Propose deleting it,
+   or compacting a multi-line comment to the one-line non-obvious why it carries. These
+   are `behaviorChanging: false`, and `confidence: high` when the rule clearly applies.
+   Keep a real non-obvious why (a workaround, an edge case, a business rule).
+   Write the findings JSON to your output path — do not edit source files."
 
 3. **over-engineering** — "Review these changed files for over-engineering: reinvented
    standard-library/framework functionality, unnecessary dependencies, speculative
    abstractions, config for things with one caller, YAGNI violations. For each, say
-   what to delete and what replaces it. Prefer behavior-preserving deletions. Return
-   findings-only JSON — do not edit files."
+   what to delete and what replaces it. Prefer behavior-preserving deletions. Write the
+   findings JSON to your output path — do not edit source files."
 
 Each subagent should read the repo's `CLAUDE.md`/`AGENTS.md` for local conventions
 before judging.
 
+While the lenses run, wait for their completion notifications. Reading the diff or
+running the gate yourself in the meantime duplicates their work.
+
 ## Step 3 — Merge & dedupe
 
-Group findings that target the **same file and nearby lines with the same intent** into
-one merged finding. Record an **agreement count** = how many distinct lenses flagged
-it. Keep the clearest wording and the highest confidence in the group.
+Read each lens output file. Group findings that target the **same file and nearby lines
+with the same intent** into one merged finding. Record an **agreement count** = how many
+distinct lenses flagged it. Keep the clearest wording and the highest confidence in the
+group. Then delete the lens output files.
 
 ## Step 4 — Classify each merged finding
 
@@ -122,9 +144,11 @@ explicitly — do not claim the code is verified.
   any the user picks.
 - If any edit was reverted in Step 6, list it and why.
 
+Keep it terminal-friendly. Do not re-print unchanged code.
+
 ## Scope guardrails
 
 - Only report/fix within the resolved scope — don't wander into unrelated files.
 - Never `git add`, commit, or push. Leave the working tree for the user to review.
-- If a lens returns malformed JSON, ask it once to reformat; if still broken, mark that
-  lens as failed in the report rather than guessing.
+- If a lens output is malformed JSON, ask that lens once to rewrite it; if still broken,
+  mark that lens as failed in the report rather than guessing.
