@@ -71,11 +71,12 @@ EACH phase you MUST:
 reports through typed messages instead of printed lines:
 
 - Step 5: print the summary, then report once with
-  `orca orchestration send --type worker_done --subject "<status>" --body "<what changed, findings,
-  what remains>" --task-id <task_id> --dispatch-id <dispatch_id> --outcome succeeded
-  --files-modified "path/a,path/b" --json`, using the ids from the preamble, never invented ones.
+  `orca orchestration send --type worker_done --subject '<status>' --body '<what changed, findings,
+  what remains>' --task-id <task_id> --dispatch-id <dispatch_id> --outcome succeeded
+  --files-modified 'path/a,path/b' --json`, using the ids from the preamble, never invented ones.
+  Single-quote every text value and keep apostrophes out of it, so your shell expands nothing.
 - Step 7: send the same message with `--outcome failed` (never encode failure only in prose), or
-  ask with `orca orchestration ask --question "<question>" --options "<csv>" --timeout-ms 600000
+  ask with `orca orchestration ask --question '<question>' --options '<csv>' --timeout-ms 600000
   --json` when an orchestrator decision unblocks you. A timed-out ask stays pending: resume it with
   `--resume <message_id>`, never re-ask.
 - `BLOCKED: push requested` becomes a `worker_done` with `--outcome failed` and that reason.
@@ -98,9 +99,9 @@ Send it with the backend's Send a prompt command.
 
 ## T3 — Orca task spec (replaces T2 on Orca)
 
-Goes into `task-create --spec`; Orca delivers it with the lifecycle preamble. No shell-quoting
-limits, so punctuation and newlines are fine. It must still be self-contained, because every phase
-runs in a brand-new worker process.
+Goes into `task-create --spec` from a file, as `orca.md` shows; Orca delivers it with the lifecycle
+preamble. Passed that way, punctuation and newlines are fine. It must still be self-contained,
+because every phase runs in a brand-new worker process.
 
 ```
 Fresh context. First read the full plan at <ABSOLUTE PLAN PATH>, then WORKER-BRIEF.md in this

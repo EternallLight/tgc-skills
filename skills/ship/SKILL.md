@@ -77,7 +77,7 @@ plus a report.**
      follow its stall watch until it exits.
    - `reviewer <login>`: require the login to match `^[A-Za-z0-9-]+(\[bot\])?$`. Confirm
      the PR's `headRefOid` equals local HEAD, record that SHA and the current UTC time
-     (`date -u +%FT%TZ`) as `SINCE`, then request the review once with `gh pr edit <n> --add-reviewer <login>`. Wait with
+     (`date -u +%FT%TZ`) as `SINCE`, then request the review once with `gh pr edit <n> --add-reviewer '<login>'`. Wait with
      one foreground Bash call (`timeout: 600000`), at most twice, never `sleep` across
      turns:
      ```bash

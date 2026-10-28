@@ -39,10 +39,14 @@ older CLI; stop and tell the user.
 Bind one Run, then create one task per phase. Chain phases inside a lane with `--deps`; phases in
 different lanes take no deps on each other.
 
+Write each spec to a file first and pass it as `"$(cat '<spec file>')"`: the shell does not
+re-expand substituted text, so backticks, `$`, and quotes in the spec stay literal. Single-quote
+every other free-text value, and rephrase it to avoid apostrophes.
+
 ```bash
-orca orchestration run-create --objective "Execute <PLAN_FILE>: <plan title>" --json
-orca orchestration task-create --spec "<T3 spec for phase 1>" --json
-orca orchestration task-create --spec "<T3 spec for phase 2>" --deps '["<phase 1 task id>"]' --json
+orca orchestration run-create --objective 'Execute <PLAN_FILE>: <plan title>' --json
+orca orchestration task-create --spec "$(cat '<phase 1 spec file>')" --json
+orca orchestration task-create --spec "$(cat '<phase 2 spec file>')" --deps '["<phase 1 task id>"]' --json
 ```
 
 ## Create the lane worktree and branch
@@ -80,7 +84,7 @@ When nothing has to be written into the worktree before the worker starts, one c
 worktree, the task, and the worker; run the tracking check above on the worktree it reports:
 
 ```bash
-orca orchestration worker-start --spec "<task spec>" --worktree new-top-level --name <change-slug> --repo path:'<repo>' --base-branch origin/<default-branch> --agent claude --model sonnet --effort high --setup run --json
+orca orchestration worker-start --spec "$(cat '<task spec file>')" --worktree new-top-level --name <change-slug> --repo path:'<repo>' --base-branch origin/<default-branch> --agent claude --model sonnet --effort high --setup run --json
 ```
 
 The call exits 0 only for `ready`. On a non-zero exit, do not relaunch: read `failedStage`,
@@ -98,7 +102,7 @@ below work for both; `orca terminal` verbs only work when `worker-show` reports 
 The task spec is the prompt; `worker-start` delivers it. For guidance during a phase:
 
 ```bash
-orca orchestration send --to dispatch:<dispatch_id> --subject "<subject>" --body "<guidance>" --json
+orca orchestration send --to dispatch:<dispatch_id> --subject '<subject>' --body '<guidance>' --json
 ```
 
 The worker reads follow-ups at its own checkpoints. A successful `send` proves delivery to the
@@ -146,7 +150,7 @@ row's `projection.attention` and `projection.nextAction`.
 A worker `question`:
 
 ```bash
-orca orchestration reply --id <message_id> --body "<answer>" --json
+orca orchestration reply --id <message_id> --body '<answer>' --json
 ```
 
 Typed mail does not see a raw permission dialog inside the agent. If a lane is quiet with no
